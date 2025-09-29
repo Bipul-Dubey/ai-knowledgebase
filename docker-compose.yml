@@ -1,13 +1,13 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # Go/Gin microservice
+  # Go service - acts as API gateway (publicly exposed)
   users-service:
     build:
       context: ./users-service
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8080:8080" # Only expose Go service publicly
     environment:
       - AI_SERVICE_URL=http://ai-service:8000
     depends_on:
@@ -15,13 +15,12 @@ services:
     networks:
       - microservices-network
 
-  # Python/FastAPI AI service
+  # Python service - internal only (not exposed to host)
   ai-service:
     build:
       context: ./ai-service
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    # Remove ports section - no external access
     networks:
       - microservices-network
 
