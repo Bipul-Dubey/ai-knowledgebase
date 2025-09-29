@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Go/Gin microservice
+  users-service:
+    build:
+      context: ./users-service
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - AI_SERVICE_URL=http://ai-service:8000
+    depends_on:
+      - ai-service
+    networks:
+      - microservices-network
+
+  # Python/FastAPI AI service
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      - microservices-network
+
+networks:
+  microservices-network:
+    driver: bridge
