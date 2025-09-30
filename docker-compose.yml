@@ -1,28 +1,57 @@
 version: "3.8"
 
 services:
-  # Go service - acts as API gateway (publicly exposed)
   users-service:
     build:
       context: ./users-service
       dockerfile: Dockerfile
     ports:
-      - "8080:8080" # Only expose Go service publicly
+      - "8080:8080"
     environment:
       - AI_SERVICE_URL=http://ai-service:8000
     depends_on:
       - ai-service
     networks:
       - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Python service - internal only (not exposed to host)
+  chats-service:
+    build:
+      context: ./chats-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - AI_SERVICE_URL=http://ai-service:8000
+    depends_on:
+      - ai-service
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   ai-service:
     build:
       context: ./ai-service
       dockerfile: Dockerfile
-    # Remove ports section - no external access
     networks:
       - microservices-network
+    # Add health check for ai-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   microservices-network:
