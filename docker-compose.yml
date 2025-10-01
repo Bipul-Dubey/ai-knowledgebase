@@ -3,8 +3,8 @@ version: "3.8"
 services:
   users-service:
     build:
-      context: ./users-service
-      dockerfile: Dockerfile
+      context: .  # Project root context
+      dockerfile: users-service/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -14,44 +14,30 @@ services:
     networks:
       - microservices-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   chats-service:
     build:
-      context: ./chats-service
-      dockerfile: Dockerfile
+      context: .  # Project root context
+      dockerfile: chats-service/Dockerfile
     ports:
       - "8081:8081"
     environment:
-      - AI_SERVICE_URL=http://ai-service:8000
+      - GRPC_HOST=ai-service:50051
     depends_on:
       - ai-service
     networks:
       - microservices-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   ai-service:
     build:
-      context: ./ai-service
-      dockerfile: Dockerfile
+      context: .  # Project root context
+      dockerfile: ai-service/Dockerfile
+    ports:
+      - "50051:50051"
     networks:
       - microservices-network
-    # Add health check for ai-service
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 networks:
   microservices-network:

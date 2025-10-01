@@ -1,4 +1,3 @@
-# Use official Golang 1.24 alpine image as build stage
 FROM golang:1.24-alpine AS builder
 
 # Install git (needed for go get modules)
@@ -7,14 +6,14 @@ RUN apk add --no-cache git
 # Set working directory inside container
 WORKDIR /app
 
-# Copy go.mod and go.sum files to download dependencies
-COPY go.mod go.sum ./
+# Copy go.mod and go.sum files from users-service directory (context is project root)
+COPY users-service/go.mod users-service/go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy source code from users-service directory
+COPY users-service/ ./
 
 # Build the Go binary
 RUN go build -o users-service main.go

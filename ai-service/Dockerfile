@@ -2,11 +2,27 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Copy requirements from ai-service directory
+COPY ai-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+# Copy proto files from project root (now accessible because context is project root)
+COPY proto ./proto
 
-EXPOSE 8000
+# Generate gRPC Python files using exact local command (no ../ needed)
+RUN python3 -m grpc_tools.protoc -I proto \
+    --python_out=proto \
+    --grpc_python_out=proto \
+    proto/ai_service.proto
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Copy application code from ai-service directory
+COPY ai-service/app ./app
+
+# Set PYTHONPATH to include proto directory
+ENV PYTHONPATH="${PYTHONPATH}:/app/proto"
+
+# Expose gRPC port
+EXPOSE 50051
+
+# Run gRPC server
+CMD ["python3", "app/main.py"]

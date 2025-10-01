@@ -1,25 +1,29 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+import grpc
+from concurrent import futures
+import sys
+import os
 
-app = FastAPI()
+# Add the proto directory specifically to Python path
+proto_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'proto')
+if proto_dir not in sys.path:
+    sys.path.insert(0, proto_dir)
 
-class AIRequest(BaseModel):
-    text: str
+# Now import directly
+import ai_service_pb2 as pb
+import ai_service_pb2_grpc as pb_grpc
 
-class AIResponse(BaseModel):
-    result: str
-    status: str
+class InferenceServicer(pb_grpc.InferenceServicer):
+    def Predict(self, request, context):
+        result = request.input 
+        return pb.PredictReply(output=result)
 
-@app.post("/process")
-async def process_ai(request: AIRequest):
-    # Your AI processing logic here
-    processed_text = f"AI processed: {request.text}"
-    
-    return AIResponse(
-        result=processed_text,
-        status="success"
-    )
+def serve():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    pb_grpc.add_InferenceServicer_to_server(InferenceServicer(), server)
+    server.add_insecure_port("[::]:50051")
+    print("gRPC server starting on port 50051...")
+    server.start()
+    server.wait_for_termination()
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+if __name__ == "__main__":
+    serve()

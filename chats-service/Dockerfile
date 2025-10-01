@@ -1,37 +1,38 @@
-# Use official Golang 1.24 alpine image as build stage
 FROM golang:1.24-alpine AS builder
 
-# Install git (needed for go get modules)
-RUN apk add --no-cache git
+# Install git and protoc
+RUN apk add --no-cache git protobuf
 
-# Set working directory inside container
 WORKDIR /app
 
-# Copy go.mod and go.sum files to download dependencies
-COPY go.mod go.sum ./
+# Install Go protoc plugins
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-# Download dependencies
+# Copy go files from chats-service directory (context is project root)
+COPY chats-service/go.mod chats-service/go.sum ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy proto files from project root
+COPY proto ./proto
+
+# Generate Go gRPC files using your exact command
+RUN protoc -I proto proto/ai_service.proto \
+    --go_out=proto \
+    --go-grpc_out=proto \
+    --go_opt=paths=source_relative \
+    --go-grpc_opt=paths=source_relative
+
+# Copy chats-service source code
+COPY chats-service/ ./
 
 # Build the Go binary
 RUN go build -o chats-service main.go
 
-# Use minimal alpine image for final runtime image
+# Runtime stage
 FROM alpine:latest
-
-# Add CA certificates for HTTPS calls, if needed
 RUN apk add --no-cache ca-certificates
-
 WORKDIR /app
-
-# Copy the executable from builder stage
 COPY --from=builder /app/chats-service .
-
-# Expose port 8081
 EXPOSE 8081
-
-# Run the binary
 CMD ["./chats-service"]

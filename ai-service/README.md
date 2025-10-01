@@ -16,39 +16,39 @@ This is an AI microservice built with Python. It exposes APIs using **FastAPI** 
 
 1. **Clone the repository** (if not already):
 
-    ```
-    git clone <your-repo-url>
-    cd <your-repo-folder>
-    ```
+   ```
+   git clone <your-repo-url>
+   cd <your-repo-folder>
+   ```
 
 2. **Create a Python virtual environment:**
 
-    ```
-    python3 -m venv venv
-    ```
+   ```
+   python3 -m venv venv
+   ```
 
 3. **Activate the virtual environment:**
 
-    - On Linux/macOS:
-      ```
-      source venv/bin/activate
-      ```
-    - On Windows:
-      ```
-      .\venv\Scripts\activate
-      ```
+   - On Linux/macOS:
+     ```
+     source venv/bin/activate
+     ```
+   - On Windows:
+     ```
+     .\venv\Scripts\activate
+     ```
 
 4. **Install dependencies:**
 
-    ```
-    pip install -r requirements.txt
-    ```
+   ```
+   pip install -r requirements.txt
+   ```
 
 5. **Run the FastAPI app:**
 
-    ```
-    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    ```
+   ```
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
 
 ---
 
@@ -56,15 +56,16 @@ This is an AI microservice built with Python. It exposes APIs using **FastAPI** 
 
 1. **Build the Docker image:**
 
-    ```
-    docker build -t ai-service .
-    ```
+   ```
+   docker build -t ai-service .
+   ```
 
 2. **Run the Docker container:**
 
-    ```
-    docker run -p 8000:8000 ai-service
-    ```
+   ```
+   docker run -p 8000:8000 ai-service
+   ```
+
 ---
 
 ### Access the service

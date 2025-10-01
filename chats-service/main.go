@@ -1,79 +1,61 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
+	"context"
 	"net/http"
 	"os"
+	"time"
+
+	pb "github.com/Bipul-Dubey/ai-knowledgebase/chats-service/proto"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-type AIRequest struct {
-	Text string `json:"text"`
-}
-
-type AIResponse struct {
-	Result string `json:"result"`
-	Status string `json:"status"`
+type PredictRequest struct {
+	Input string `json:"input" binding:"required"`
 }
 
 func main() {
 	r := gin.Default()
-
-	// Public API endpoint
-	r.POST("/api/process", func(c *gin.Context) {
-		var request AIRequest
-		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		// Call internal Python service
-		aiResult, err := callAIService(request)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "AI service failed"})
-			return
-		}
-
-		c.JSON(http.StatusOK, aiResult)
-	})
-
-	r.Run(":8081")
+	r.POST("/predict", predictHandler)
+	r.Run(":8081") // Listen on port 8081
 }
 
-func callAIService(request AIRequest) (*AIResponse, error) {
-	// Get AI service URL from environment variable
-	aiServiceURL := os.Getenv("AI_SERVICE_URL")
-	if aiServiceURL == "" {
-		aiServiceURL = "http://ai-service:8000"
+func predictHandler(c *gin.Context) {
+	var body PredictRequest
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	// Prepare request payload
-	jsonData, err := json.Marshal(request)
+	grpcHost := os.Getenv("GRPC_HOST")
+	if grpcHost == "" {
+		grpcHost = "localhost:50051" // for local development
+	}
+
+	// Use grpc.NewClient instead of deprecated grpc.Dial
+	conn, err := grpc.NewClient(grpcHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to connect to gRPC server"})
+		return
 	}
+	defer conn.Close()
 
-	// Make HTTP request to Python service
-	resp, err := http.Post(aiServiceURL+"/process", "application/json", bytes.NewBuffer(jsonData))
+	client := pb.NewInferenceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	res, err := client.Predict(ctx, &pb.PredictRequest{Input: body.Input})
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
-	var aiResponse AIResponse
-	err = json.Unmarshal(body, &aiResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	return &aiResponse, nil
+	c.JSON(http.StatusOK, gin.H{
+		"output": res.Output,
+	})
 }
