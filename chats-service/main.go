@@ -33,7 +33,7 @@ func predictHandler(c *gin.Context) {
 
 	grpcHost := os.Getenv("GRPC_HOST")
 	if grpcHost == "" {
-		grpcHost = "localhost:50051" // for local development
+		grpcHost = "localhost:50051" // for local development// replace with your actual domain
 	}
 
 	// Use grpc.NewClient instead of deprecated grpc.Dial
