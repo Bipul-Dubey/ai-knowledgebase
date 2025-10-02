@@ -6,17 +6,20 @@ RUN apk add --no-cache git
 # Set working directory inside container
 WORKDIR /app
 
-# Copy go.mod and go.sum files from users-service directory (context is project root)
-COPY users-service/go.mod users-service/go.sum ./
+# Copy Go workspace files (all Go services to satisfy workspace)
+COPY go.work ./
+COPY shared/ ./shared/
+COPY users-service/ ./users-service/
+COPY chats-service/ ./chats-service/
 
-# Download dependencies
+# Set working directory to users-service for build
+WORKDIR /app/users-service
+
+# Download dependencies using workspace
 RUN go mod download
 
-# Copy source code from users-service directory
-COPY users-service/ ./
-
-# Build the Go binary
-RUN go build -o users-service main.go
+# Build the Go binary (workspace will resolve shared package automatically)
+RUN CGO_ENABLED=0 GOOS=linux go build -o users-service main.go
 
 # Use minimal alpine image for final runtime image
 FROM alpine:latest
@@ -27,7 +30,7 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 
 # Copy the executable from builder stage
-COPY --from=builder /app/users-service .
+COPY --from=builder /app/users-service/users-service .
 
 # Expose port 8080
 EXPOSE 8080

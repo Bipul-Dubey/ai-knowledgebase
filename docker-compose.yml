@@ -1,37 +1,50 @@
-version: "3.8"
 
 services:
   users-service:
     build:
-      context: .  # Project root context
+      context: .
       dockerfile: users-service/Dockerfile
     ports:
       - "8080:8080"
     environment:
-      - AI_SERVICE_URL=http://ai-service:8000
-    depends_on:
-      - ai-service
+      - PORT=8080
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - DB_NAME=ai_knowledgebase
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - microservices-network
     restart: unless-stopped
 
   chats-service:
     build:
-      context: .  # Project root context
+      context: .
       dockerfile: chats-service/Dockerfile
     ports:
       - "8081:8081"
     environment:
+      - PORT=8081
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - DB_NAME=ai_knowledgebase
       - GRPC_HOST=ai-service:50051
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - ai-service
     networks:
       - microservices-network
     restart: unless-stopped
 
+  # Python AI service - independent, no shared package
   ai-service:
     build:
-      context: .  # Project root context
+      context: .
       dockerfile: ai-service/Dockerfile
     ports:
       - "50051:50051"

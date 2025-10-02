@@ -6,17 +6,17 @@ WORKDIR /app
 COPY ai-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy proto files from project root (now accessible because context is project root)
-COPY proto ./proto
+# Copy proto files from project root
+COPY proto/ ./proto/
 
-# Generate gRPC Python files using exact local command (no ../ needed)
+# Generate gRPC Python files
 RUN python3 -m grpc_tools.protoc -I proto \
     --python_out=proto \
     --grpc_python_out=proto \
     proto/ai_service.proto
 
 # Copy application code from ai-service directory
-COPY ai-service/app ./app
+COPY ai-service/app/ ./app/
 
 # Set PYTHONPATH to include proto directory
 ENV PYTHONPATH="${PYTHONPATH}:/app/proto"

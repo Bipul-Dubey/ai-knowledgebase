@@ -9,30 +9,32 @@ WORKDIR /app
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-# Copy go files from chats-service directory (context is project root)
-COPY chats-service/go.mod chats-service/go.sum ./
-RUN go mod download
+# Copy Go workspace files (all Go services to satisfy workspace)
+COPY go.work ./
+COPY shared/ ./shared/
+COPY chats-service/ ./chats-service/
+COPY users-service/ ./users-service/
 
 # Copy proto files from project root
-COPY proto ./proto
+COPY proto/ ./proto/
 
-# Generate Go gRPC files using your exact command
+# Generate Go gRPC files in the chats-service directory
+RUN mkdir -p chats-service/proto
 RUN protoc -I proto proto/ai_service.proto \
-    --go_out=proto \
-    --go-grpc_out=proto \
+    --go_out=chats-service/proto \
+    --go-grpc_out=chats-service/proto \
     --go_opt=paths=source_relative \
     --go-grpc_opt=paths=source_relative
 
-# Copy chats-service source code
-COPY chats-service/ ./
-
-# Build the Go binary
-RUN go build -o chats-service main.go
+# Build the chats-service binary
+WORKDIR /app/chats-service
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o chats-service main.go
 
 # Runtime stage
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=builder /app/chats-service .
+COPY --from=builder /app/chats-service/chats-service .
 EXPOSE 8081
 CMD ["./chats-service"]
