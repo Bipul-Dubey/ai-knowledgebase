@@ -5,14 +5,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(userHandler *handlers.UserHandler) *gin.Engine {
+func SetupRoutes(hm *handlers.HandlerManager) *gin.Engine {
 	r := gin.Default()
 
 	api := r.Group("/api/v1")
 	{
 		users := api.Group("/users")
 		{
-			users.GET("", userHandler.GetUsers)
+			users.POST("", hm.AuthenticationHandler.GetUsersAndPredict)
 		}
 	}
 

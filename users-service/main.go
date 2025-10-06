@@ -16,22 +16,31 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer database.Close()
 
-	// Initialize service with direct *sql.DB
-	userService := services.NewUserService(database)
+	sqlDB, err := database.DB()
+	if err != nil {
+		log.Fatal("Failed to retrieve underlying SQL DB:", err)
+	}
+	defer func() {
+		if cerr := sqlDB.Close(); cerr != nil {
+			log.Printf("Error closing database: %v", cerr)
+		}
+	}()
 
-	// Initialize handler
-	userHandler := handlers.NewUserHandler(userService)
+	// Initialize service layer
+	serviceManager := services.NewServiceManager(database)
+
+	// Initialize handler layer
+	handlerManager := handlers.NewHandlerManager(serviceManager)
 
 	// Setup routes
-	r := routes.SetupRoutes(userHandler)
+	r := routes.SetupRoutes(handlerManager)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("Users Service starting on port %s", port)
+	log.Printf("🚀 Users Service starting on port %s", port)
 	log.Fatal(r.Run(":" + port))
 }

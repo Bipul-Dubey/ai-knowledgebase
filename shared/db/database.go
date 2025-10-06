@@ -2,16 +2,19 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"time"
 
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func NewDB() (*sql.DB, error) {
+// NewDB initializes and returns a GORM DB instance.
+func NewDB() (*gorm.DB, error) {
 	host := getEnv("DB_HOST", "localhost")
 	port := getEnvInt("DB_PORT", 5432)
 	user := getEnv("DB_USER", "postgres")
@@ -24,24 +27,45 @@ func NewDB() (*sql.DB, error) {
 		host, port, user, password, dbname, sslmode,
 	)
 
-	db, err := sql.Open("postgres", dsn)
+	// GORM logger setup (info-level; can switch to Silent in production)
+	newLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold: time.Second,
+			LogLevel:      logger.Info,
+			Colorful:      true,
+		},
+	)
+
+	// Initialize GORM with PostgreSQL driver
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: newLogger,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Get generic SQL DB to configure pool & test connection
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get generic DB instance: %w", err)
 	}
 
 	// Configure connection pool
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	// Check connection
-	if err := db.PingContext(context.Background()); err != nil {
+	if err := sqlDB.PingContext(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	log.Printf("Connected to database: %s", dbname)
+	log.Printf("✅ Connected to database: %s", dbname)
 	return db, nil
 }
 
+// getEnv retrieves a string environment variable or returns a default.
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -49,6 +73,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+// getEnvInt retrieves an integer environment variable or returns a default.
 func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {

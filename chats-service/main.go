@@ -17,7 +17,16 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer database.Close()
+
+	sqlDB, err := database.DB()
+	if err != nil {
+		log.Fatal("Failed to retrieve underlying SQL DB:", err)
+	}
+	defer func() {
+		if cerr := sqlDB.Close(); cerr != nil {
+			log.Printf("Error closing DB connection: %v", cerr)
+		}
+	}()
 
 	// Initialize gRPC client (optional)
 	grpcClient, err := config.NewGRPCClient()

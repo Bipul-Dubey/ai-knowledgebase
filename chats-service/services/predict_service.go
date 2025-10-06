@@ -2,12 +2,12 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"github.com/Bipul-Dubey/ai-knowledgebase/chats-service/config"
 	"github.com/Bipul-Dubey/ai-knowledgebase/chats-service/models"
 	pb "github.com/Bipul-Dubey/ai-knowledgebase/chats-service/proto"
+	"gorm.io/gorm"
 )
 
 type PredictService interface {
@@ -15,11 +15,11 @@ type PredictService interface {
 }
 
 type predictService struct {
-	db         *sql.DB
+	db         *gorm.DB
 	grpcClient *config.GRPCClient
 }
 
-func NewPredictService(db *sql.DB, grpcClient *config.GRPCClient) PredictService {
+func NewPredictService(db *gorm.DB, grpcClient *config.GRPCClient) PredictService {
 	return &predictService{
 		db:         db,
 		grpcClient: grpcClient,
@@ -59,25 +59,15 @@ func (s *predictService) GetUsersAndPredict(ctx context.Context, input string) (
 }
 
 func (s *predictService) getUsers(ctx context.Context) ([]models.User, error) {
-	query := `SELECT id, name, age, email, created_at, updated_at FROM users ORDER BY id`
+	var users []models.User
 
-	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
+	// Using GORM raw SQL query (like your previous sql.DB query)
+	query := `SELECT id, name, age, email, created_at, updated_at FROM users ORDER BY id`
+	if err := s.db.WithContext(ctx).Raw(query).Scan(&users).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var users []models.User
-	for rows.Next() {
-		var u models.User
-		err := rows.Scan(&u.ID, &u.Name, &u.Age, &u.Email, &u.CreatedAt, &u.UpdatedAt)
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, u)
-	}
-
-	return users, rows.Err()
+	return users, nil
 }
 
 func (s *predictService) makePrediction(ctx context.Context, input string) (string, error) {
