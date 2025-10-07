@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/Bipul-Dubey/ai-knowledgebase/shared/models"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/services"
 	"github.com/gin-gonic/gin"
 )
@@ -15,13 +16,48 @@ func NewAuthenticationHandler(authService services.AuthenticationService) *Authe
 	return &AuthenticationHandler{authService: authService}
 }
 
-func (h *AuthenticationHandler) GetUsersAndPredict(c *gin.Context) {
-	input := c.Query("input") // for example, get input from query param
-	_, err := h.authService.GetUsersAndPredict(c.Request.Context(), input)
+// ----------------------
+// SignUp Handler
+// ----------------------
+func (h *AuthenticationHandler) SignUp(c *gin.Context) {
+	var req models.SignupRequest
+
+	// Bind JSON body into SignUpRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Call service layer
+	res, err := h.authService.SignUp(c.Request.Context(), &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "Prediction failed",
+			"message": "Signup failed",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Signup successful",
+		"data":    res,
+	})
+}
+
+func (h *AuthenticationHandler) VerifyAccount(c *gin.Context) {
+	var req models.VerifyAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := h.authService.VerifyAccount(c.Request.Context(), req.Token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Verification failed",
 			"error":   err.Error(),
 		})
 		return
@@ -29,7 +65,7 @@ func (h *AuthenticationHandler) GetUsersAndPredict(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Prediction successful",
-		"data":    input + "Predicted result",
+		"message": "Account verified successfully",
+		"data":    res,
 	})
 }
