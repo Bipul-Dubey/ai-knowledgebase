@@ -6,10 +6,12 @@ import (
 
 type ServiceManager struct {
 	AuthenticationService AuthenticationService
+	UserService           UserService
 }
 
 func NewServiceManager(db *gorm.DB) *ServiceManager {
 	return &ServiceManager{
 		AuthenticationService: NewAuthenticationService(db),
+		UserService:           NewUserService(db),
 	}
 }

@@ -6,10 +6,12 @@ import (
 
 type HandlerManager struct {
 	AuthenticationHandler *AuthenticationHandler
+	UserHandler           *UserHandler
 }
 
 func NewHandlerManager(sm *services.ServiceManager) *HandlerManager {
 	return &HandlerManager{
 		AuthenticationHandler: NewAuthenticationHandler(sm.AuthenticationService),
+		UserHandler:           NewUserHandler(sm.UserService),
 	}
 }
