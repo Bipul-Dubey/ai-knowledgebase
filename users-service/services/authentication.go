@@ -18,7 +18,7 @@ import (
 type AuthenticationService interface {
 	SignUp(ctx context.Context, req *models.SignupRequest) (*models.SignupResponse, error)
 	VerifyAccount(ctx context.Context, token string) (*models.VerifyAccountResponse, error)
-	// Login(ctx context.Context, req *models.LoginRequest) (*models.LoginResponse, error)
+	Login(ctx context.Context, req *models.LoginRequest) (*models.LoginResponse, error)
 	// InviteUser(ctx context.Context, req *models.InviteUserRequest) (*models.InviteUserResponse, error)
 	// AcceptInvite(ctx context.Context, req *models.AcceptInviteRequest) (*models.AcceptInviteResponse, error)
 }
@@ -208,4 +208,53 @@ func (s *authenticationService) VerifyAccount(ctx context.Context, token string)
 	}
 
 	return res, nil
+}
+
+func (s *authenticationService) Login(ctx context.Context, req *models.LoginRequest) (*models.LoginResponse, error) {
+	// 1️⃣ Find organization by account_id (BIGINT)
+	var org models.Organization
+	if err := s.db.Where("account_id = ?", req.AccountID).First(&org).Error; err != nil {
+		return nil, errors.New("organization not found")
+	}
+
+	// 2️⃣ Find user by email + organization_id
+	var user models.User
+	if err := s.db.Where("email = ? AND organization_id = ?", req.Email, org.ID).First(&user).Error; err != nil {
+		return nil, errors.New("invalid credentials")
+	}
+
+	// 3️⃣ Check if user is active
+	if user.Status != "active" {
+		return nil, errors.New("user is not active")
+	}
+
+	// 4️⃣ Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		return nil, errors.New("invalid credentials")
+	}
+
+	jwtUser := utils.JWTUser{
+		UserID:         user.ID.String(),
+		OrganizationID: user.OrganizationID.String(),
+		AccountID:      org.AccountID,
+		Role:           user.Role,
+		TokenVersion:   user.TokenVersion,
+	}
+
+	token, err := utils.GenerateJWT(jwtUser)
+	if err != nil {
+		return nil, errors.New("failed to generate access token")
+	}
+
+	// 7️⃣ Prepare response with org info
+	return &models.LoginResponse{
+		AccessToken:      token,
+		UserID:           user.ID,
+		OrganizationID:   user.OrganizationID,
+		Role:             user.Role,
+		Name:             user.Name,
+		Email:            user.Email,
+		Status:           user.Status,
+		OrganizationName: org.Name,
+	}, nil
 }

@@ -34,7 +34,7 @@ func main() {
 	handlerManager := handlers.NewHandlerManager(serviceManager)
 
 	// Setup routes
-	r := routes.SetupRoutes(handlerManager)
+	r := routes.SetupRoutes(handlerManager, database)
 
 	port := os.Getenv("PORT")
 	if port == "" {

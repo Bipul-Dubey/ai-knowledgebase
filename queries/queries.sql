@@ -38,6 +38,7 @@ CREATE TABLE users (
     invite_token VARCHAR(255),
     expires_at TIMESTAMP,
     reactivated_at TIMESTAMP,
+    token_version INT DEFAULT 1,           -- 🔒 for JWT invalidation after password change
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     is_deleted BOOLEAN DEFAULT FALSE,
@@ -54,5 +55,7 @@ CREATE TABLE users (
         DEFERRABLE INITIALLY DEFERRED
 );
 
--- Indexes for fast lookup
+-- Indexes for performance
 CREATE INDEX idx_users_org ON users(organization_id);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_status ON users(status);

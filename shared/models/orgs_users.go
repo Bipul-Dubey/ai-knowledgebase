@@ -34,11 +34,12 @@ type User struct {
 	InviteToken    *string    `gorm:"type:varchar(255)"`
 	ExpiresAt      *time.Time
 	ReactivatedAt  *time.Time
-	CreatedAt      time.Time `gorm:"default:now()"`
-	UpdatedAt      time.Time `gorm:"default:now()"`
-	IsDeleted      bool      `gorm:"default:false"`
+	TokenVersion   int  `gorm:"default:1"`
+	IsDeleted      bool `gorm:"default:false"`
 	DeletedAt      *time.Time
 	DeletedBy      *uuid.UUID
+	CreatedAt      time.Time `gorm:"default:now()"`
+	UpdatedAt      time.Time `gorm:"default:now()"`
 
 	// ⚡️ Send email on invite (InviteToken)
 	// ⚡️ Send email on verify (InviteToken)
