@@ -31,7 +31,7 @@ CREATE TABLE users (
     organization_id UUID NOT NULL,         -- FK to organizations
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,           -- unique per org
-    password VARCHAR(255),
+    password VARCHAR(255) NOT NULL,
     role VARCHAR(20) NOT NULL,             -- owner / maintainer / member
     status VARCHAR(20) DEFAULT 'pending',  -- pending / active / suspended
     invited_by UUID,                       -- who invited this user
@@ -44,6 +44,8 @@ CREATE TABLE users (
     is_deleted BOOLEAN DEFAULT FALSE,
     deleted_at TIMESTAMP,
     deleted_by UUID,
+    reset_token VARCHAR(255),
+    reset_expires_at TIMESTAMP,
 
     -- Constraints
     CONSTRAINT unique_org_email UNIQUE (organization_id, email),

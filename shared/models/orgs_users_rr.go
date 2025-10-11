@@ -92,3 +92,17 @@ type AcceptInviteResponse struct {
 	IsVerified     bool      `json:"is_verified"`
 	// ⚡️ Send welcome email after activation
 }
+
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
+type ResetPasswordByEmailRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}

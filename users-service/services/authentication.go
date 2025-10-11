@@ -10,6 +10,7 @@ import (
 
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/models"
 	utils "github.com/Bipul-Dubey/ai-knowledgebase/shared/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -19,8 +20,11 @@ type AuthenticationService interface {
 	SignUp(ctx context.Context, req *models.SignupRequest) (*models.SignupResponse, error)
 	VerifyAccount(ctx context.Context, token string) (*models.VerifyAccountResponse, error)
 	Login(ctx context.Context, req *models.LoginRequest) (*models.LoginResponse, error)
-	// InviteUser(ctx context.Context, req *models.InviteUserRequest) (*models.InviteUserResponse, error)
-	// AcceptInvite(ctx context.Context, req *models.AcceptInviteRequest) (*models.AcceptInviteResponse, error)
+	InviteUser(inviterID uuid.UUID, inviterRole string, orgID uuid.UUID, req models.InviteUserRequest) (*models.InviteUserResponse, error)
+	AcceptInvite(req models.AcceptInviteRequest) (*models.AcceptInviteResponse, error)
+	ForgotPassword(email string) (interface{}, error)
+	ResetPassword(claims any, oldPassword, newPassword string) (interface{}, error)
+	ResetPasswordByEmail(token string, newPassword string) (interface{}, error)
 }
 type authenticationService struct {
 	db *gorm.DB
@@ -256,5 +260,210 @@ func (s *authenticationService) Login(ctx context.Context, req *models.LoginRequ
 		Email:            user.Email,
 		Status:           user.Status,
 		OrganizationName: org.Name,
+	}, nil
+}
+
+func (s *authenticationService) InviteUser(inviterID uuid.UUID, inviterRole string, orgID uuid.UUID, req models.InviteUserRequest) (*models.InviteUserResponse, error) {
+	// Role-based rules
+	switch inviterRole {
+	case "owner":
+		if req.Role != "maintainer" && req.Role != "member" {
+			return nil, errors.New("owner can invite only maintainer or member")
+		}
+	case "maintainer":
+		if req.Role != "member" {
+			return nil, errors.New("maintainer can invite only member")
+		}
+	default:
+		return nil, errors.New("members cannot invite users")
+	}
+
+	// Check if user already exists
+	var existing models.User
+	if err := s.db.Where("organization_id = ? AND email = ?", orgID, req.Email).First(&existing).Error; err == nil {
+		if existing.Status == "active" {
+			return nil, errors.New("user already exists and is active")
+		}
+		return nil, errors.New("user has already been invited")
+	}
+
+	tempPassword, err := utils.GenerateTempPassword()
+	if err != nil {
+		return nil, errors.New("failed to create account:pass")
+	}
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
+
+	// Create invite token
+	inviteToken := uuid.NewString()
+	expiresAt := time.Now().Add(48 * time.Hour)
+
+	newUser := &models.User{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		Name:           req.Name,
+		Email:          req.Email,
+		Role:           req.Role,
+		Status:         "pending",
+		InvitedBy:      &inviterID,
+		InviteToken:    &inviteToken,
+		ExpiresAt:      &expiresAt,
+		Password:       string(hashedPassword),
+	}
+
+	if err := s.db.Create(newUser).Error; err != nil {
+		return nil, err
+	}
+
+	return &models.InviteUserResponse{
+		UserID:         newUser.ID,
+		Email:          newUser.Email,
+		Name:           newUser.Name,
+		Role:           newUser.Role,
+		Status:         newUser.Status,
+		InviteToken:    *newUser.InviteToken,
+		ExpiresAt:      newUser.ExpiresAt,
+		InvitedBy:      inviterID,
+		OrganizationID: orgID,
+	}, nil
+}
+
+func (s *authenticationService) AcceptInvite(req models.AcceptInviteRequest) (*models.AcceptInviteResponse, error) {
+	var user models.User
+	if err := s.db.Where("invite_token = ?", req.Token).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("invalid invite token")
+		}
+		return nil, err
+	}
+
+	if user.ExpiresAt != nil && user.ExpiresAt.Before(time.Now()) {
+		return nil, errors.New("invite token has expired")
+	}
+
+	if user.Status == "active" {
+		return nil, errors.New("user already active, no need to accept invite")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, errors.New("failed to hash password")
+	}
+
+	user.Name = req.Name
+	user.Password = string(hashedPassword)
+	user.Status = "active"
+	user.InviteToken = nil
+	user.ExpiresAt = nil
+	user.UpdatedAt = time.Now()
+
+	if err := s.db.Save(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return &models.AcceptInviteResponse{
+		UserID:         user.ID,
+		Name:           user.Name,
+		Email:          user.Email,
+		OrganizationID: user.OrganizationID,
+		Role:           user.Role,
+		Status:         user.Status,
+		IsVerified:     true,
+	}, nil
+}
+
+// 🔹 Forgot Password
+func (s *authenticationService) ForgotPassword(email string) (interface{}, error) {
+	var user models.User
+	if err := s.db.Where("email = ? AND status = ?", email, "active").First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not registered or inactive")
+		}
+		return nil, err
+	}
+
+	resetToken := uuid.NewString()
+	expiresAt := time.Now().Add(1 * time.Hour)
+
+	if err := s.db.Model(&user).Updates(map[string]interface{}{
+		"invite_token": resetToken,
+		"expires_at":   expiresAt,
+	}).Error; err != nil {
+		return nil, err
+	}
+
+	// 💌 You can send resetToken via email here
+	return gin.H{
+		"email":       user.Email,
+		"reset_token": resetToken,
+		"expires_at":  expiresAt,
+	}, nil
+}
+
+// 🔹 Reset Password
+func (s *authenticationService) ResetPassword(claims any, oldPassword, newPassword string) (interface{}, error) {
+	userClaims := claims.(*utils.JWTClaims)
+
+	var user models.User
+	if err := s.db.First(&user, "id = ?", userClaims.UserID).Error; err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	if user.Status != "active" {
+		return nil, errors.New("user is not active")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+		return nil, errors.New("old password is incorrect")
+	}
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	user.Password = string(hashedPassword)
+	user.TokenVersion += 1
+
+	if err := s.db.Save(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return gin.H{
+		"user_id":  user.ID,
+		"email":    user.Email,
+		"role":     user.Role,
+		"status":   user.Status,
+		"verified": true,
+	}, nil
+}
+
+func (s *authenticationService) ResetPasswordByEmail(token string, newPassword string) (interface{}, error) {
+	var user models.User
+	if err := s.db.Where("invite_token = ?", token).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("invalid or expired reset link")
+		}
+		return nil, err
+	}
+
+	// ⏰ Check token expiry
+	if user.ExpiresAt.Before(time.Now()) {
+		return nil, errors.New("reset link expired")
+	}
+
+	// 🧩 Hash new password
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	user.Password = string(hashed)
+	user.Status = "active"
+	user.TokenVersion += 1
+	user.InviteToken = nil
+	user.ExpiresAt = nil
+
+	if err := s.db.Save(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return gin.H{
+		"user_id":  user.ID,
+		"email":    user.Email,
+		"status":   user.Status,
+		"verified": true,
 	}, nil
 }

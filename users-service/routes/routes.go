@@ -16,11 +16,16 @@ func SetupRoutes(h *handlers.HandlerManager, db *gorm.DB) *gin.Engine {
 		api.POST("/signup", h.AuthenticationHandler.SignUp)
 		api.POST("/verify-account", h.AuthenticationHandler.VerifyAccount)
 		api.POST("/login", h.AuthenticationHandler.Login)
-		api.POST("/accept-invite", h.UserHandler.AcceptInviteHandler)
-		api.Use(middleware.AuthMiddleware(db))
-		{
-			api.POST("/invite", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.InviteUserHandler)
+		api.POST("/accept-invite", h.AuthenticationHandler.AcceptInviteHandler)
+		api.POST("/forgot-password", h.AuthenticationHandler.ForgotPassword)
+		api.POST("/reset-password-email", h.AuthenticationHandler.ResetPasswordByEmail)
 
+		// new group with authentication
+		auth := api.Group("")
+		auth.Use(middleware.AuthMiddleware(db))
+		{
+			auth.POST("/invite", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.AuthenticationHandler.VerifyAccount)
+			auth.POST("/reset-password", h.AuthenticationHandler.ResetPassword)
 		}
 
 	}
