@@ -26,6 +26,8 @@ func SetupRoutes(h *handlers.HandlerManager, db *gorm.DB) *gin.Engine {
 		{
 			auth.POST("/invite", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.AuthenticationHandler.VerifyAccount)
 			auth.POST("/reset-password", h.AuthenticationHandler.ResetPassword)
+
+			auth.GET("/organization/details", h.OrganizationHandler.GetOrganizationDetails)
 		}
 
 	}

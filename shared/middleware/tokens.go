@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -46,7 +45,6 @@ func validateJWT(tokenStr string, db *gorm.DB) (*utils.JWTClaims, error) {
 		return jwtSecret, nil
 	})
 
-	fmt.Println("token", token)
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid token in validateJWT")
 	}

@@ -106,3 +106,15 @@ type ResetPasswordByEmailRequest struct {
 	Token       string `json:"token" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
+
+type OrganizationDetailsResponse struct {
+	OrganizationID    string    `json:"organization_id"`
+	AccountID         int64     `json:"account_id"`
+	Name              string    `json:"name"`
+	Status            string    `json:"status"`
+	CreatedAt         time.Time `json:"created_at"`
+	TotalUsers        *int      `json:"total_users,omitempty"`
+	OwnerEmail        *string   `json:"owner_email,omitempty"`
+	CreatedByUserID   string    `json:"created_by_user_id,omitempty"`
+	CreatedByUserName string    `json:"created_by_user_name,omitempty"`
+}
