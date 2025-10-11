@@ -8,9 +8,14 @@ import (
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/handlers"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/routes"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/services"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️  No .env file found, relying on environment variables")
+	}
+
 	// Initialize database
 	database, err := db.NewDB()
 	if err != nil {

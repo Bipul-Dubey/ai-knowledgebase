@@ -122,13 +122,13 @@ func (h *AuthenticationHandler) AcceptInviteHandler(c *gin.Context) {
 
 // 🔹 Forgot Password
 func (h *AuthenticationHandler) ForgotPassword(c *gin.Context) {
-	var req models.ForgotPasswordRequest
+	var req models.AccountVerificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, utils.APIResponse(true, "Invalid request payload", nil, http.StatusBadRequest))
 		return
 	}
 
-	resp, err := h.authService.ForgotPassword(req.Email)
+	resp, err := h.authService.ForgotPassword(req.Email, req.AccountID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.APIResponse(true, err.Error(), nil, http.StatusBadRequest))
 		return
@@ -174,4 +174,19 @@ func (h *AuthenticationHandler) ResetPasswordByEmail(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, utils.APIResponse(false, "Password reset successfully", resp))
+}
+
+func (h *AuthenticationHandler) ResendVerificationEmail(c *gin.Context) {
+	var req models.AccountVerificationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.APIResponse(true, "Invalid request payload", nil, http.StatusBadRequest))
+		return
+	}
+
+	if err := h.authService.ResendVerificationEmail(req.AccountID, req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, utils.APIResponse(true, err.Error(), nil, http.StatusBadRequest))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.APIResponse(false, "Verification email resent successfully", nil, http.StatusOK))
 }
