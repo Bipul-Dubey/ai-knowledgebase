@@ -4,14 +4,12 @@ from app.apis.chats import router as chats_route
 from app.apis.documents import router as documents
 from app.middleware.auth import AuthMiddleware
 from app.utils.errors import register_exception_handlers
-from app.helpers.local_embeddings import init_embeddings_system
 
 app = FastAPI(title="Chats Service")
 
 @app.on_event("startup")
 async def on_startup():
     await init_db() 
-    init_embeddings_system()
 
 @app.on_event("shutdown")
 async def on_shutdown():

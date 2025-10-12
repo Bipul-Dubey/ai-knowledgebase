@@ -12,5 +12,6 @@ class Settings:
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "root")
     DB_NAME = os.getenv("DB_NAME", "ai_knowledgebase")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY","OPENAI_API_KEY")
 
 settings = Settings()

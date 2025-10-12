@@ -1,18 +1,10 @@
-from fastapi import APIRouter, Request, UploadFile, File, status
+from fastapi import APIRouter, Request, UploadFile, File, status, HTTPException
 import os
-import shutil
-from uuid import uuid4
 from pydantic import BaseModel
-
+from app.helpers.file_manager import save_file_locally, BASE_UPLOAD_DIR
 from app.database.helpers import get_db_cursor
 from app.utils.response import APIResponse
-from app.helpers.local_embeddings import (
-    BASE_UPLOAD_DIR,
-    add_embedding_to_store,
-    chunk_text,
-    persist_data,
-    search_faiss,
-)
+from app.helpers.openai_embeddings import process_document
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -28,19 +20,10 @@ async def upload_document(request: Request, file: UploadFile = File(...), title:
 
     org_id = claims["organization_id"]
 
-    # Create organization folder
-    org_folder = os.path.join(BASE_UPLOAD_DIR, str(org_id))
-    os.makedirs(org_folder, exist_ok=True)
+    # Save file locally & validate
+    file_info = save_file_locally(file, org_id, title)
 
-    ext = os.path.splitext(file.filename)[1]
-    title = title or os.path.splitext(file.filename)[0]
-    file_name = f"{uuid4()}{ext}"
-    file_path = os.path.join(org_folder, file_name)
-
-    # Save file locally
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
+    # Insert metadata into DB
     async with get_db_cursor() as cur:
         await cur.execute(
             """
@@ -48,7 +31,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), title:
             VALUES (gen_random_uuid(), %s, %s, %s, %s, 'pending')
             RETURNING *
             """,
-            (org_id, title, file_name, ext),
+            (org_id, file_info["title"], file_info["file_name"], file_info["extension"])
         )
         document = await cur.fetchone()
 
@@ -56,60 +39,86 @@ async def upload_document(request: Request, file: UploadFile = File(...), title:
 
 
 # ======================================================
-# Train All Documents (FAISS Embedding)
+# Train All Documents
 # ======================================================
 @router.post("/train")
 async def train_all_documents(request: Request):
-    claims = getattr(request.state, "claims", None)
-    if not claims:
-        return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
+    try:
+        claims = getattr(request.state, "claims", None)
+        if not claims:
+            raise HTTPException(status_code=401, detail="Unauthorized")
 
-    org_id = claims["organization_id"]
+        org_id = claims["organization_id"]
 
-    # Fetch all organization documents
-    async with get_db_cursor() as cur:
-        await cur.execute("SELECT id, file_name FROM documents WHERE organization_id=%s", (org_id,))
-        documents = await cur.fetchall()
+        # Fetch all documents for this organization
+        async with get_db_cursor() as cur:
+            await cur.execute(
+                "SELECT id, file_name FROM documents WHERE organization_id=%s", (org_id,)
+            )
+            documents = await cur.fetchall()
 
-    if not documents:
-        return APIResponse(True, "No documents found", None, status.HTTP_404_NOT_FOUND)
+        if not documents:
+            raise HTTPException(status_code=404, detail="No documents found")
 
-    # Clear previous chunks
-    async with get_db_cursor() as cur:
-        await cur.execute("DELETE FROM document_chunks WHERE organization_id=%s", (org_id,))
+        # Delete previous chunks for this organization
+        async with get_db_cursor() as cur:
+            await cur.execute(
+                "DELETE FROM document_chunks WHERE organization_id=%s", (org_id,)
+            )
 
-    org_folder = os.path.join(BASE_UPLOAD_DIR, str(org_id))
+        total_chunks = 0
+        trained_docs = 0
+        trained_doc_ids = []
+        error_messages = []
 
-    for doc in documents:
-        file_path = os.path.join(org_folder, doc["file_name"])
-        if not os.path.exists(file_path):
-            continue
+        async with get_db_cursor() as cur:
+            for doc in documents:
+                file_path = os.path.join(BASE_UPLOAD_DIR, str(org_id), doc["file_name"])
+                if not os.path.exists(file_path):
+                    error_messages.append(f"File missing: {file_path}")
+                    continue
+                try:
+                    chunks_inserted = await process_document(file_path, doc["id"], org_id, cur)
+                    if chunks_inserted > 0:
+                        trained_docs += 1
+                        total_chunks += chunks_inserted
+                        trained_doc_ids.append(doc["id"])
+                except Exception as e:
+                    error_messages.append(f"Failed training document {doc['id']}: {str(e)}")
+                    continue  # skip failing document
 
-        # Read and chunk document
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        chunks = chunk_text(content)
-
-        # Store each chunk embedding + record
-        for i, chunk in enumerate(chunks):
-            emb_id = add_embedding_to_store(chunk, doc["id"], org_id)
-            async with get_db_cursor() as cur:
+            # Update status only for trained documents
+            if trained_doc_ids:
                 await cur.execute(
-                    """
-                    INSERT INTO document_chunks (id, document_id, organization_id, chunk_index, chunk_text, embedding_id)
-                    VALUES (gen_random_uuid(), %s, %s, %s, %s, %s)
-                    """,
-                    (doc["id"], org_id, i, chunk, emb_id),
+                    "UPDATE documents SET status='active' WHERE id = ANY(%s)",
+                    (trained_doc_ids,)
                 )
 
-    # Update document statuses
-    async with get_db_cursor() as cur:
-        await cur.execute("UPDATE documents SET status='active' WHERE organization_id=%s", (org_id,))
+        if error_messages:
+            # Return detailed error response with status 400 or other appropriate code
+            return APIResponse(
+                True,
+                "Error: ${error_messages}",
+                "Errors occurred during training",
+                status.HTTP_400_BAD_REQUEST,
+            )
 
-    persist_data()
+        return APIResponse(
+            False,
+            "✅ Training completed successfully",
+            {
+                "total_documents": len(documents),
+                "documents_trained": trained_docs,
+                "total_chunks_inserted": total_chunks
+            },
+            status.HTTP_200_OK,
+        )
 
-    return APIResponse(False, "✅ All documents trained & active", {"total_documents": len(documents)}, status.HTTP_200_OK)
+    except HTTPException as http_exc:
+        raise http_exc
+
+    except Exception as e:
+        return APIResponse(True, f"Unexpected error occurred: {str(e)}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ======================================================
@@ -127,6 +136,5 @@ async def query_documents(request: Request, payload: QueryPayload):
         return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
 
     org_id = claims["organization_id"]
-    results = search_faiss(payload.query, top_k=payload.top_k, organization_id=org_id)
 
-    return APIResponse(False, "Query results", results, status.HTTP_200_OK)
+    return APIResponse(False, "Query results", org_id, status.HTTP_200_OK)
