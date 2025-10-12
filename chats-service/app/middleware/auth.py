@@ -21,10 +21,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # 🔹 1. Validate Authorization header
             auth_header = request.headers.get("Authorization")
             if not auth_header or not auth_header.startswith("Bearer "):
-                raise HTTPException(
-                    status_code=401,
-                    detail="Missing or invalid Authorization header",
-                )
+                raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
             token_str = auth_header[7:].strip()
 
@@ -33,62 +30,49 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 claims = jwt.decode(token_str, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             except ExpiredSignatureError:
                 raise HTTPException(status_code=401, detail="Token has expired")
-            except DecodeError:
-                raise HTTPException(status_code=401, detail="Token decoding failed")
-            except InvalidTokenError:
+            except (DecodeError, InvalidTokenError):
                 raise HTTPException(status_code=401, detail="Invalid token")
 
             # 🔹 3. Extract claims
             user_id = claims.get("user_id")
             token_version = claims.get("token_version")
-
             if not user_id or token_version is None:
                 raise HTTPException(status_code=401, detail="Invalid token claims")
 
-            # 🔹 4. Fetch user from DB (with safe connection handling)
+            # 🔹 4. Fetch user from DB
             try:
                 async with get_db_cursor() as cur:
                     await cur.execute(
-                        """
-                        SELECT id, name, email, role, status, token_version
-                        FROM users
-                        WHERE id = %s
-                        """,
+                        "SELECT id, name, email, role, status, token_version FROM users WHERE id = %s",
                         (user_id,),
                     )
                     user = await cur.fetchone()
             except (OperationalError, InterfaceError) as db_err:
                 print("❌ Database connection error:", db_err)
-                raise HTTPException(
+                return JSONResponse(
                     status_code=503,
-                    detail="Database temporarily unavailable. Please try again later.",
+                    content=APIResponse(True, "Database temporarily unavailable", None, 503),
                 )
             except Exception as db_ex:
                 print("🔥 DB Query Error:", db_ex)
                 traceback.print_exc()
-                raise HTTPException(
+                return JSONResponse(
                     status_code=500,
-                    detail="Internal server error while verifying user.",
+                    content=APIResponse(True, "Internal server error while verifying user", None, 500),
                 )
 
             # 🔹 5. Validate user record
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
-
             if user["status"] != "active":
-                raise HTTPException(status_code=401, detail="User is not active")
-
+                raise HTTPException(status_code=403, detail="User is not active")  # 403 makes more sense
             if user["token_version"] != token_version:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Token invalid due to password change",
-                )
+                raise HTTPException(status_code=401, detail="Token invalid due to password change")
 
             # 🔹 6. Attach user info to request
             request.state.user = user
             request.state.claims = claims
 
-            # ✅ Continue request chain
             return await call_next(request)
 
         except HTTPException as e:
@@ -98,9 +82,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
 
         except Exception as e:
-            print("🔥 Unexpected Auth Error:", e)
+            # Internal server error
+            print("🔥 Unexpected Auth Middleware Error:", e)
             traceback.print_exc()
             return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content=APIResponse(True, "Authentication failed", None, status.HTTP_401_UNAUTHORIZED),
+                status_code=500,
+                content=APIResponse(True, "Internal server error", None, 500),
             )
