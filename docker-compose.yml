@@ -32,6 +32,8 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=root
       - DB_NAME=ai_knowledgebase
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  
     networks:
       - microservices-network
     restart: unless-stopped

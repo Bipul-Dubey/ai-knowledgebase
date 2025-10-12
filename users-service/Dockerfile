@@ -10,7 +10,6 @@ WORKDIR /app
 COPY go.work ./
 COPY shared/ ./shared/
 COPY users-service/ ./users-service/
-COPY chats-service/ ./chats-service/
 
 # Set working directory to users-service for build
 WORKDIR /app/users-service
