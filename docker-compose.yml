@@ -24,30 +24,14 @@ services:
       context: .
       dockerfile: chats-service/Dockerfile
     ports:
-      - "8081:8081"
+      - "50051:50051"
     environment:
-      - PORT=8081
+      - PORT=50051
       - DB_HOST=host.docker.internal
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=root
       - DB_NAME=ai_knowledgebase
-      - GRPC_HOST=ai-service:50051
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - ai-service
-    networks:
-      - microservices-network
-    restart: unless-stopped
-
-  # Python AI service - independent, no shared package
-  ai-service:
-    build:
-      context: .
-      dockerfile: ai-service/Dockerfile
-    ports:
-      - "50051:50051"
     networks:
       - microservices-network
     restart: unless-stopped
