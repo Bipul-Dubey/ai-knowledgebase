@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from app.database.postgres_client import init_db, close_db
-from app.apis.chats import router as chats_route
 from app.apis.documents import router as documents
 from app.middleware.auth import AuthMiddleware
 from app.utils.errors import register_exception_handlers
@@ -17,7 +16,6 @@ async def on_shutdown():
 
 register_exception_handlers(app)
 app.add_middleware(AuthMiddleware)
-app.include_router(chats_route, prefix="/api/v1")
 app.include_router(documents, prefix="/api/v1")
 
 @app.get("/health")

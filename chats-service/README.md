@@ -12,3 +12,9 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 50051
 
 pip freeze > requirements.txt
+
+<!-- CELERY  -->
+
+#### LOGS CHECK
+
+celery -A app.helpers.train_document worker --loglevel=info

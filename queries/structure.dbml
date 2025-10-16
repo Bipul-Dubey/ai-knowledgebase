@@ -1,41 +1,170 @@
 Table organizations {
-  id UUID [pk]
-  name VARCHAR(255) [not null]
-  account_id UUID [unique, not null] 
-  created_by UUID                   
-  status VARCHAR(20) [default: 'pending'] 
-  created_at TIMESTAMP
-  updated_at TIMESTAMP
-
-  Indexes {
-    account_id
-  }
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar
+  account_id bigint [unique, note: "use sequence organization_account_id_seq"]
+  created_by uuid
+  status varchar [default: 'pending']
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 }
 
 Table users {
-  id UUID [pk]
-  organization_id UUID
-  name VARCHAR(255) [not null]
-  email VARCHAR(255) [not null]          // unique per org
-  password VARCHAR(255)
-  role VARCHAR(20) [not null]            // owner / maintainer / member
-  status VARCHAR(20) [default: 'pending'] // pending / active / suspended
-  invited_by UUID                        // who invited this user
-  invite_token VARCHAR(255)
-  expires_at TIMESTAMP
-  reactivated_at TIMESTAMP
-  created_at TIMESTAMP
-  updated_at TIMESTAMP
-  is_deleted BOOLEAN [default: false]
-  deleted_at TIMESTAMP
-  deleted_by UUID
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_id uuid [ref: > organizations.id]
+  name varchar
+  email varchar
+  password varchar
+  role varchar // owner / maintainer / member
+  status varchar [default: 'pending']
+  invited_by uuid [ref: > users.id]
+  token_version int [default: 1]
+  is_deleted boolean [default: false]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 
-  Indexes {
-    (organization_id, email) [unique]
-    organization_id
+  // unique email per organization
+  Index(unique_org_email) {
+    organization_id, email [unique]
+  }
+
+  // only one owner per user across all orgs
+  Index(unique_owner_per_user) {
+    id [unique, note: "Partial unique index where role='owner'"]
   }
 }
 
-Ref: users.organization_id > organizations.id [delete: cascade]
-Ref: organizations.created_by > users.id
-Ref: users.invited_by > users.id
+
+Table documents {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_id uuid [ref: > organizations.id]
+  created_by uuid
+  title varchar
+  file_name varchar
+  file_type varchar
+  source_url text
+  status varchar [default: 'pending']
+  file_size bigint
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+Table urls {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_id uuid [ref: > organizations.id]
+  url varchar
+  title varchar
+  status varchar [default: 'active']
+  created_at timestamp [default: `now()`]
+}
+
+Table document_chunks {
+  id uuid [pk, default: `gen_random_uuid()`]
+  document_id uuid [ref: > documents.id]
+  organization_id uuid [ref: > organizations.id]
+  chunk_index int
+  chunk_text text
+  embedding vector(1536)
+  embedding_model varchar
+  token_count int
+  metadata jsonb
+  created_at timestamp [default: `now()`]
+}
+
+Table chunk_relations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  from_chunk_id uuid [ref: > document_chunks.id]
+  to_chunk_id uuid [ref: > document_chunks.id]
+  relation_type varchar
+  score double
+  metadata jsonb
+  created_at timestamp [default: `now()`]
+}
+
+Table chats {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_id uuid [ref: > organizations.id]
+  user_id uuid [ref: > users.id]
+  chat_type varchar
+  document_id uuid [ref: > documents.id, note: 'nullable']
+  url_id uuid [ref: > urls.id, note: 'nullable']
+  title varchar
+  status varchar [default: 'active']
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+Table messages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  chat_id uuid [ref: > chats.id]
+  organization_id uuid [ref: > organizations.id]
+  sender_user_id uuid [ref: > users.id, note: 'nullable for system/assistant']
+  role varchar
+  content text
+  content_json jsonb
+  created_at timestamp [default: `now()`]
+  attachment_group_id uuid
+}
+
+Table attachments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_id uuid [ref: > organizations.id]
+  message_id uuid [ref: > messages.id]
+  file_name varchar
+  mime_type varchar
+  size_bytes bigint
+  storage_key varchar
+  thumbnail_key varchar
+  duration_seconds int
+  metadata jsonb
+  created_at timestamp [default: `now()`]
+}
+
+Table training_jobs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_id uuid [ref: > organizations.id]
+  initiated_by uuid [ref: > users.id]
+  status varchar [default: 'pending']
+  total_documents int
+  total_chunks int
+  error_message text
+  started_at timestamp
+  finished_at timestamp
+  created_at timestamp [default: `now()`]
+}
+
+Table queries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  organization_id uuid [ref: > organizations.id]
+  user_id uuid [ref: > users.id]
+  query_text text
+  query_embedding vector(1536)
+  model_used varchar
+  status varchar [default: 'pending']
+  created_at timestamp [default: `now()`]
+}
+
+Table query_results {
+  id uuid [pk, default: `gen_random_uuid()`]
+  query_id uuid [ref: > queries.id]
+  chunk_id uuid [ref: > document_chunks.id]
+  rank int
+  score double
+  retrieved_text text
+  created_at timestamp [default: `now()`]
+}
+
+// Relationships
+Ref: users.organization_id > organizations.id
+Ref: documents.organization_id > organizations.id
+Ref: urls.organization_id > organizations.id
+Ref: document_chunks.organization_id > organizations.id
+Ref: chats.organization_id > organizations.id
+Ref: messages.organization_id > organizations.id
+Ref: attachments.organization_id > organizations.id
+Ref: messages.chat_id > chats.id
+Ref: attachments.message_id > messages.id
+Ref: document_chunks.document_id > documents.id
+Ref: chunk_relations.from_chunk_id > document_chunks.id
+Ref: chunk_relations.to_chunk_id > document_chunks.id
+Ref: query_results.chunk_id > document_chunks.id
+Ref: queries.organization_id > organizations.id

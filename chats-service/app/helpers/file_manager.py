@@ -1,103 +1,54 @@
-import os
-import shutil
-from uuid import uuid4
-from fastapi import UploadFile, HTTPException, status
-import pandas as pd
-from PyPDF2 import PdfReader
-from docx import Document
+import aiofiles
+import tempfile
+from app.helpers.s3_storage import download_file_from_s3
+from typing import List
+from pathlib import Path
+import docx
+import textract
 
-# ================================
-# Settings
-# ================================
-BASE_UPLOAD_DIR = os.path.join(os.getcwd(), "local_data", "documents")
-os.makedirs(BASE_UPLOAD_DIR, exist_ok=True)
+class FileManager:
+    @staticmethod
+    async def download_to_tempfile(s3_key: str) -> str:
+        """
+        Download S3 file to a temporary local file and return the path
+        """
+        content = await download_file_from_s3(s3_key)
+        print("content", content[:100])
 
-ALLOWED_EXTENSIONS = {".txt", ".pdf", ".docx", ".xls", ".xlsx"}
+        # Preserve file extension for later extraction
+        ext = Path(s3_key).suffix or ".bin"
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
 
-# ================================
-# File Saving & Extraction
-# ================================
-def save_file_locally(file: UploadFile, org_id: str, title: str = None) -> dict:
-    """
-    Save uploaded file to organization folder, validate extension, return metadata.
-    """
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-        )
+        async with aiofiles.open(tmp_file.name, "wb") as f:
+            await f.write(content)
 
-    org_folder = os.path.join(BASE_UPLOAD_DIR, str(org_id))
-    os.makedirs(org_folder, exist_ok=True)
-
-    file_name = f"{uuid4()}{ext}"
-    file_path = os.path.join(org_folder, file_name)
-    title = title or os.path.splitext(file.filename)[0]
-
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    return {
-        "file_path": file_path,
-        "file_name": file_name,
-        "title": title,
-        "extension": ext
-    }
+        return tmp_file.name
 
 
-def extract_text_from_file(file_path: str) -> str:
-    """
-    Extract plain text from supported files (.txt, .pdf, .docx, .xls, .xlsx)
-    """
-    ext = os.path.splitext(file_path)[1].lower()
-    try:
-        if ext == ".txt":
+    @staticmethod
+    def extract_text(file_path: str) -> str:
+        """
+        Extract text from PDF, DOCX, TXT, Excel etc.
+        """
+        ext = Path(file_path).suffix.lower()
+        if ext in [".txt"]:
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
-
-        elif ext == ".pdf":
-            reader = PdfReader(file_path)
-            return "\n".join([p.extract_text() or "" for p in reader.pages])
-
-        elif ext == ".docx":
-            doc = Document(file_path)
-            return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
-
-        elif ext in {".xls", ".xlsx"}:
-            dfs = pd.read_excel(file_path, sheet_name=None)
-            all_text = []
-            for sheet_name, df in dfs.items():
-                text = df.to_string(index=False)
-                all_text.append(f"Sheet: {sheet_name}\n{text}")
-            return "\n\n".join(all_text)
-
+        elif ext in [".doc", ".docx"]:
+            doc = docx.Document(file_path)
+            return "\n".join([p.text for p in doc.paragraphs])
+        elif ext in [".pdf", ".xls", ".xlsx"]:
+            # textract auto-detects and extracts text
+            return textract.process(file_path).decode("utf-8")
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
-    except Exception as e:
-        raise RuntimeError(f"Failed to extract text from {file_path}: {str(e)}")
-
-
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-    """
-    Splits a long text into chunks for embeddings.
-
-    Args:
-        text (str): The input text.
-        chunk_size (int): Approximate number of words per chunk.
-        overlap (int): Number of overlapping words between chunks.
-
-    Returns:
-        List[str]: List of text chunks.
-    """
-    words = text.split()
-    chunks = []
-    start = 0
-    while start < len(words):
-        end = start + chunk_size
-        chunk = " ".join(words[start:end])
-        if chunk.strip():
-            chunks.append(chunk)
-        start += chunk_size - overlap
-    return chunks
+    @staticmethod
+    def chunk_text(text: str, chunk_size: int = 1000) -> List[str]:
+        """
+        Break text into chunks for embeddings
+        """
+        chunks = []
+        for i in range(0, len(text), chunk_size):
+            chunks.append(text[i:i + chunk_size])
+        return chunks
