@@ -5,14 +5,15 @@ from openai import OpenAI, APIError, RateLimitError, APIConnectionError, Timeout
 from app.database.helpers import get_db_cursor
 from app.helpers.file_manager import FileManager
 from app.core.config import settings
-
-import asyncio
-from app.core.config import settings
 import app.database.postgres_client as pg
 
+
+# ---------------------------
+# PostgreSQL Initialization
+# ---------------------------
 async def init_pg():
     if pg.db is None:
-        await pg.init_db() 
+        await pg.init_db()
 
 
 def safe_init_pg():
@@ -24,27 +25,33 @@ def safe_init_pg():
         # No running loop (e.g., Celery worker)
         asyncio.run(init_pg())
 
+
 safe_init_pg()
 
+
+# ---------------------------
+# Celery Setup
+# ---------------------------
 celery_app = Celery(
     "train_worker",
     broker=settings.RABBITMQ_URL,
     backend=settings.RABBITMQ_BACKEND
 )
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-# Celery reliable settings
+# Reliable Celery settings
 celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_default_delivery_mode="persistent",
 )
 
+# OpenAI client
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-# -------------------
-# Helper: OpenAI Embedding with Safe Backoff
-# -------------------
+
+# ---------------------------
+# OpenAI Embedding Helper with Retry
+# ---------------------------
 async def get_embedding_with_retry(text: str, retries: int = 5, base_delay: float = 1.0):
     """
     Fetch embedding from OpenAI API with exponential backoff + jitter.
@@ -59,7 +66,6 @@ async def get_embedding_with_retry(text: str, retries: int = 5, base_delay: floa
             return response.data[0].embedding
 
         except (RateLimitError, APIConnectionError, Timeout) as e:
-            # Handle known transient errors
             delay = base_delay * (2 ** (attempt - 1)) + (0.2 * attempt)
             print(f"[OpenAI RETRY] attempt {attempt}/{retries}: {e}. Retrying in {delay:.2f}s...")
             if attempt == retries:
@@ -76,10 +82,9 @@ async def get_embedding_with_retry(text: str, retries: int = 5, base_delay: floa
             raise
 
 
-
-# -------------------
-# Helper: DB Status Updates
-# -------------------
+# ---------------------------
+# Database Status Helpers
+# ---------------------------
 async def update_training_job_status(job_id, status, error_message=None, total_chunks=None):
     async with get_db_cursor(commit=True) as cur:
         await cur.execute(
@@ -109,13 +114,16 @@ async def update_document_status(doc_id, status, error_message=None):
         )
 
 
-# -------------------
-# Main Async Training Logic
-# -------------------
-async def train_documents(job_id, org_id, user_id, document_ids):
+# ---------------------------
+# Main Training Function (Documents + URLs)
+# ---------------------------
+async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None):
     total_chunks = 0
     any_success = False
     any_fail = False
+
+    document_ids = document_ids or []
+    url_ids = url_ids or []
 
     # Mark job as running
     async with get_db_cursor(commit=True) as cur:
@@ -124,72 +132,111 @@ async def train_documents(job_id, org_id, user_id, document_ids):
             (job_id,)
         )
 
-    # Fetch documents
-    async with get_db_cursor() as cur:
-        await cur.execute(
-            """
-            SELECT id, s3_key, file_name
-            FROM documents
-            WHERE organization_id=%s AND id = ANY(%s)
-            """,
-            (org_id, document_ids)
-        )
-        docs = await cur.fetchall()
+    # Collect sources
+    sources = []
 
-    for doc in docs:
-        doc_id = doc["id"]
+    # ---------------------------
+    # Fetch Documents
+    # ---------------------------
+    if document_ids:
+        async with get_db_cursor() as cur:
+            await cur.execute(
+                "SELECT id, s3_key, file_name FROM documents WHERE organization_id=%s AND id = ANY(%s)",
+                (org_id, document_ids)
+            )
+            docs = await cur.fetchall()
+            for d in docs:
+                sources.append({"id": d["id"], "type": "document", "s3_key": d["s3_key"], "file_name": d["file_name"]})
+
+    # ---------------------------
+    # Fetch URLs
+    # ---------------------------
+    if url_ids:
+        async with get_db_cursor() as cur:
+            await cur.execute(
+                "SELECT id, url, title FROM urls WHERE organization_id=%s AND id = ANY(%s)",
+                (org_id, url_ids)
+            )
+            urls = await cur.fetchall()
+            for u in urls:
+                sources.append({"id": u["id"], "type": "url", "url": u["url"], "title": u["title"]})
+
+    # ---------------------------
+    # Process Each Source
+    # ---------------------------
+    for src in sources:
+        src_id = src["id"]
+        src_type = src["type"]
+
         try:
-            tmp_path = await FileManager.download_to_tempfile(doc["s3_key"])
-            print("[TEMP PATH]:",tmp_path)
-            content = FileManager.extract_text(tmp_path)
+            content = await FileManager.get_text_from_source(src)
         except Exception as e:
-            print(f"[DOC FAIL] Download/Extract failed for {doc_id}: {e}")
-            await update_document_status(doc_id, "pending")
+            print(f"[{src_type.upper()} FAIL] Download/Extract failed for {src_id}: {e}")
+            if src_type == "document":
+                await update_document_status(src_id, "pending")
             any_fail = True
             continue
 
         chunks = FileManager.chunk_text(content)
         embeddings = []
-        doc_failed = False
+        src_failed = False
 
+        # ---------------------------
+        # Generate Embeddings
+        # ---------------------------
         for idx, ch in enumerate(chunks):
             try:
                 emb = await get_embedding_with_retry(ch)
                 embeddings.append(emb)
             except Exception as e:
-                print(f"[EMBED FAIL] Doc {doc_id}, chunk {idx}: {e}")
-                doc_failed = True
+                print(f"[EMBED FAIL] {src_type} {src_id}, chunk {idx}: {e}")
+                src_failed = True
                 any_fail = True
                 break
 
-        if doc_failed:
-            await update_document_status(doc_id, "pending")
+        if src_failed:
+            if src_type == "document":
+                await update_document_status(src_id, "pending")
             continue
 
-        # Insert chunks
+        # ---------------------------
+        # Insert Chunks into DB
+        # ---------------------------
         try:
             async with get_db_cursor(commit=True) as cur:
-                await cur.execute("DELETE FROM document_chunks WHERE document_id=%s", (doc_id,))
+                if src_type == "document":
+                    await cur.execute("DELETE FROM document_chunks WHERE document_id=%s", (src_id,))
+                elif src_type == "url":
+                    await cur.execute("DELETE FROM document_chunks WHERE url_id=%s", (src_id,))
+
                 for idx, ch in enumerate(chunks):
                     emb_literal = "[" + ",".join(map(str, embeddings[idx])) + "]"
                     await cur.execute(
                         """
-                        INSERT INTO document_chunks 
-                        (id, document_id, organization_id, chunk_index, chunk_text, embedding, embedding_model, created_at)
-                        VALUES (gen_random_uuid(), %s, %s, %s, %s, %s::vector, %s, NOW())
+                        INSERT INTO document_chunks
+                        (id, document_id, url_id, organization_id, chunk_index, chunk_text, embedding, embedding_model, source_type, created_at)
+                        VALUES
+                        (gen_random_uuid(), %s, %s, %s, %s, %s, %s::vector, %s, %s, NOW())
                         """,
-                        (doc_id, org_id, idx, ch, emb_literal, "text-embedding-3-small")
+                        (src_id if src_type=="document" else None,
+                         src_id if src_type=="url" else None,
+                         org_id, idx, ch, emb_literal, "text-embedding-3-small", src_type)
                     )
-            await update_document_status(doc_id, "active")
+
+            if src_type == "document":
+                await update_document_status(src_id, "active")
             total_chunks += len(chunks)
             any_success = True
         except Exception as e:
-            print(f"[DB FAIL] Failed to insert chunks for doc {doc_id}: {e}")
-            await update_document_status(doc_id, "pending")
+            print(f"[DB FAIL] Failed to insert chunks for {src_type} {src_id}: {e}")
+            if src_type == "document":
+                await update_document_status(src_id, "pending")
             any_fail = True
             continue
 
-    # Final job status
+    # ---------------------------
+    # Final Job Status
+    # ---------------------------
     if any_success and any_fail:
         final_status = "partial_failed"
     elif any_success:
@@ -201,14 +248,14 @@ async def train_documents(job_id, org_id, user_id, document_ids):
     print(f"🏁 Job {job_id} finished with status {final_status}, total_chunks={total_chunks}")
 
 
-# -------------------
-# Celery Task Entry Point
-# -------------------
+# ---------------------------
+# Celery Task Entry
+# ---------------------------
 @celery_app.task(bind=True, max_retries=3)
-def run_training_job(self, job_id, org_id, user_id, document_ids):
+def run_training_job(self, job_id, org_id, user_id, document_ids=None, url_ids=None):
     try:
         print(f"🚀 Starting job {job_id}")
-        asyncio.run(train_documents(job_id, org_id, user_id, document_ids))
+        asyncio.run(train_sources(job_id, org_id, user_id, document_ids, url_ids))
         return f"Job {job_id} completed"
     except Exception as e:
         print(f"💥 Job {job_id} failed: {e}")
