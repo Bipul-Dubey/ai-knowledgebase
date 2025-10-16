@@ -53,13 +53,15 @@ class FileManager:
 
     @staticmethod
     def _guess_extension_from_content_type(content_type: str, url: str) -> str:
+        content_type = content_type.lower()
+        url = url.lower()
         if "pdf" in content_type or url.endswith(".pdf"):
             return ".pdf"
-        elif "word" in content_type or url.endswith(".docx"):
+        elif "word" in content_type or url.endswith(".docx") or url.endswith(".doc"):
             return ".docx"
-        elif "html" in content_type or url.endswith(".html"):
+        elif "html" in content_type or url.endswith(".html") or url.endswith(".htm"):
             return ".html"
-        elif "excel" in content_type or url.endswith(".xlsx"):
+        elif "excel" in content_type or url.endswith(".xlsx") or url.endswith(".xls"):
             return ".xlsx"
         elif "text" in content_type or url.endswith(".txt"):
             return ".txt"
@@ -78,12 +80,12 @@ class FileManager:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     return f.read()
 
-            elif ext in [".docx"]:
+            elif ext in [".docx", ".doc"]:
                 doc = docx.Document(file_path)
                 return "\n".join([p.text for p in doc.paragraphs])
 
             elif ext in [".pdf", ".xls", ".xlsx"]:
-                return textract.process(file_path).decode("utf-8")
+                return textract.process(file_path).decode("utf-8", errors="ignore")
 
             elif ext in [".html", ".htm"]:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -105,7 +107,7 @@ class FileManager:
         if not text:
             return []
 
-        text = text.replace("\n", " ").replace("\r", " ")
+        text = " ".join(text.split())
         chunks = []
         start = 0
         text_length = len(text)

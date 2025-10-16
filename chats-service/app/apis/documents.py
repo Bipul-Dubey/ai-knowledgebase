@@ -5,9 +5,11 @@ from app.helpers.s3_storage import upload_file_to_s3, get_presigned_url
 from app.helpers.train_document import run_training_job
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional
+from datetime import datetime, timezone
+from hashlib import sha256
+import json
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
-
 
 # =======================
 # 📄 1️⃣ Upload Document
@@ -30,25 +32,37 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ]
-
     if file.content_type not in allowed_types:
         return APIResponse(True, f"File type '{file.content_type}' not allowed", None, status.HTTP_400_BAD_REQUEST)
 
     try:
         file_bytes = await file.read()
+        file_size = len(file_bytes)
+        file_hash = sha256(file_bytes).hexdigest()
+
+        # Optional metadata placeholder
+        metadata = {"original_filename": file.filename}
+
+        # Upload to S3
         s3_key, presigned_url, expires_at = upload_file_to_s3(
-            file_bytes, org_id, file.filename, file.content_type
+            file_bytes=file_bytes,
+            org_id=org_id,
+            filename=file.filename,
+            content_type=file.content_type,
         )
 
-        async with get_db_cursor() as cur:
+        # Insert into DB
+        async with get_db_cursor(commit=True) as cur:
             await cur.execute(
                 """
-                INSERT INTO documents 
-                (id, organization_id, created_by, file_name, file_type, s3_key, s3_url, s3_url_expires_at, status, created_at, updated_at)
-                VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, 'active', NOW(), NOW())
-                RETURNING *
+                INSERT INTO documents
+                    (created_by, organization_id, file_name, file_type, file_size, s3_key, s3_url, s3_url_expires_at,
+                     status, file_hash, metadata, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, NOW(), NOW())
+                RETURNING id, file_name, file_type, file_size, s3_url, created_at
                 """,
-                (org_id, user_id, file.filename, file.content_type, s3_key, presigned_url, expires_at)
+                (user_id, org_id, file.filename, file.content_type, file_size, s3_key, presigned_url, expires_at,
+                 file_hash, json.dumps(metadata))
             )
             document = await cur.fetchone()
 
@@ -56,7 +70,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 
     except Exception as e:
         print(f"[UPLOAD ERROR] {e}")
-        return APIResponse(True, f"Failed to upload: {str(e)}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return APIResponse(True, f"Failed to upload document: {str(e)}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =======================
@@ -66,8 +80,10 @@ class URLItem(BaseModel):
     url: HttpUrl
     title: Optional[str] = None
 
+
 class URLSubmitRequest(BaseModel):
     urls: List[URLItem]
+
 
 @router.post("/urls")
 async def submit_urls(request: Request, body: URLSubmitRequest):
@@ -76,20 +92,19 @@ async def submit_urls(request: Request, body: URLSubmitRequest):
         return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
 
     org_id = claims.get("organization_id")
-
-    # Prepare the values for bulk insert
-    values = [(org_id, item.url, item.title or None) for item in body.urls]
-
-    # Dynamically generate placeholders: (%s,%s,%s),(%s,%s,%s),...
-    placeholders = ", ".join(["(%s, %s, %s, 'active', NOW())"] * len(values))
-    flat_values = [val for tup in values for val in tup]  # flatten list of tuples
+    if not body.urls:
+        return APIResponse(True, "No URLs provided", None, status.HTTP_400_BAD_REQUEST)
 
     try:
-        async with get_db_cursor() as cur:
+        async with get_db_cursor(commit=True) as cur:
+            values = [(org_id, item.url, item.title or None, 'active', datetime.utcnow()) for item in body.urls]
+            placeholders = ", ".join(["(%s,%s,%s,%s,%s)"] * len(values))
+            flat_values = [v for tup in values for v in tup]
+
             query = f"""
                 INSERT INTO urls (organization_id, url, title, status, created_at)
                 VALUES {placeholders}
-                RETURNING *
+                RETURNING id, url, title, created_at
             """
             await cur.execute(query, flat_values)
             records = await cur.fetchall()
@@ -101,6 +116,9 @@ async def submit_urls(request: Request, body: URLSubmitRequest):
         return APIResponse(True, f"Failed to process URLs: {str(e)}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# =======================
+# 📥 3️⃣ Download Document
+# =======================
 @router.get("/download/{document_id}")
 async def download_document(document_id: str, request: Request):
     claims = getattr(request.state, "claims", None)
@@ -109,50 +127,66 @@ async def download_document(document_id: str, request: Request):
 
     org_id = claims.get("organization_id")
 
-    async with get_db_cursor() as cur:
-        await cur.execute(
-            "SELECT s3_key FROM documents WHERE id = %s AND organization_id = %s",
-            (document_id, org_id)
-        )
-        doc = await cur.fetchone()
+    try:
+        async with get_db_cursor() as cur:
+            await cur.execute(
+                """
+                SELECT s3_key, s3_url, s3_url_expires_at
+                FROM documents
+                WHERE id=%s AND organization_id=%s AND status='active'
+                """,
+                (document_id, org_id)
+            )
+            doc = await cur.fetchone()
+
         if not doc:
             return APIResponse(True, "Document not found", None, status.HTTP_404_NOT_FOUND)
 
-        presigned_url = get_presigned_url(doc["s3_key"])
-        return APIResponse(False, "Document URL generated", {"url": presigned_url}, status.HTTP_200_OK)
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
+        if doc["s3_url"] and doc["s3_url_expires_at"] and doc["s3_url_expires_at"] > now:
+            return APIResponse(False, "Document URL retrieved", {"url": doc["s3_url"]}, status.HTTP_200_OK)
+
+        presigned_url, expires_at = get_presigned_url(s3_key=doc["s3_key"], return_expiry=True)
+
+        # Update DB
+        async with get_db_cursor(commit=True) as cur:
+            await cur.execute(
+                """
+                UPDATE documents
+                SET s3_url=%s, s3_url_expires_at=%s, updated_at=NOW()
+                WHERE id=%s
+                """,
+                (presigned_url, expires_at, document_id)
+            )
+
+        return APIResponse(False, "New document URL generated", {"url": presigned_url}, status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"[DOWNLOAD ERROR] {e}")
+        return APIResponse(True, f"Failed to generate download URL: {str(e)}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
-# -----------------------------
-# Request Model
-# -----------------------------
+# =======================
+# 🧠 4️⃣ Train Documents
+# =======================
 class TrainRequest(BaseModel):
     document_ids: Optional[List[str]] = None
     url_ids: Optional[List[str]] = None
 
 
-# -----------------------------
-# Train Endpoint
-# -----------------------------
 @router.post("/train")
 async def train_documents_endpoint(request: Request, body: TrainRequest):
-    """
-    Creates a training job and enqueues it to Celery/RabbitMQ.
-    - If no document_ids or url_ids provided → train all.
-    - Otherwise, train only provided IDs.
-    """
     claims = getattr(request.state, "claims", None)
     if not claims:
         return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
 
     org_id = claims.get("organization_id")
     user_id = claims.get("user_id")
-
     document_ids = body.document_ids or []
     url_ids = body.url_ids or []
 
     try:
-        # Fetch all if no IDs passed
+        # Fetch all if no IDs provided
         if not document_ids and not url_ids:
             async with get_db_cursor() as cur:
                 await cur.execute("SELECT id FROM documents WHERE organization_id=%s", (org_id,))
@@ -165,14 +199,13 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
 
         total_sources = len(document_ids) + len(url_ids)
 
-        # Create new training job record
+        # Create training job
         async with get_db_cursor(commit=True) as cur:
             await cur.execute(
                 """
                 INSERT INTO training_jobs
-                    (id, organization_id, initiated_by, status, total_documents, created_at)
-                VALUES
-                    (gen_random_uuid(), %s, %s, 'pending', %s, NOW())
+                    (organization_id, initiated_by, status, total_documents, progress_percent, created_at, updated_at)
+                VALUES (%s, %s, 'pending', %s, 0, NOW(), NOW())
                 RETURNING id
                 """,
                 (org_id, user_id, total_sources)
@@ -180,7 +213,7 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
             job = await cur.fetchone()
             job_id = job["id"]
 
-        # Send async job to RabbitMQ (Celery)
+        # Enqueue Celery task
         run_training_job.delay(job_id, org_id, user_id, document_ids, url_ids)
 
         return APIResponse(
@@ -192,9 +225,4 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
 
     except Exception as e:
         print(f"[TRAIN ENDPOINT ERROR] {e}")
-        return APIResponse(
-            True,
-            "Failed to create training job",
-            {"error": str(e)},
-            status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return APIResponse(True, "Failed to create training job", {"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
