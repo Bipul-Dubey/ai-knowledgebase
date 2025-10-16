@@ -6,7 +6,7 @@ from app.database.helpers import get_db_cursor
 from app.helpers.file_manager import FileManager
 from app.core.config import settings
 import app.database.postgres_client as pg
-
+import random
 
 # ---------------------------
 # PostgreSQL Initialization
@@ -52,34 +52,45 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 # ---------------------------
 # OpenAI Embedding Helper with Retry
 # ---------------------------
+# async def get_embedding_with_retry(text: str, retries: int = 5, base_delay: float = 1.0):
+#     """
+#     Fetch embedding from OpenAI API with exponential backoff + jitter.
+#     """
+#     for attempt in range(1, retries + 1):
+#         try:
+#             response = await asyncio.to_thread(
+#                 client.embeddings.create,
+#                 model="text-embedding-3-small",
+#                 input=text[:8191],
+#             )
+#             return response.data[0].embedding
+
+#         except (RateLimitError, APIConnectionError, Timeout) as e:
+#             delay = base_delay * (2 ** (attempt - 1)) + (0.2 * attempt)
+#             print(f"[OpenAI RETRY] attempt {attempt}/{retries}: {e}. Retrying in {delay:.2f}s...")
+#             if attempt == retries:
+#                 print(f"[OpenAI FAIL] giving up after {retries} attempts: {e}")
+#                 raise
+#             await asyncio.sleep(delay)
+
+#         except APIError as e:
+#             print(f"[OpenAI API ERROR] {e}")
+#             raise
+
+#         except Exception as e:
+#             print(f"[OpenAI UNEXPECTED] {e}\n{traceback.format_exc()}")
+#             raise
+
 async def get_embedding_with_retry(text: str, retries: int = 5, base_delay: float = 1.0):
     """
-    Fetch embedding from OpenAI API with exponential backoff + jitter.
+    Dummy embedding generator for testing purposes.
+    Returns a fixed-length list of random floats instead of calling OpenAI.
     """
-    for attempt in range(1, retries + 1):
-        try:
-            response = await asyncio.to_thread(
-                client.embeddings.create,
-                model="text-embedding-3-small",
-                input=text[:8191],
-            )
-            return response.data[0].embedding
-
-        except (RateLimitError, APIConnectionError, Timeout) as e:
-            delay = base_delay * (2 ** (attempt - 1)) + (0.2 * attempt)
-            print(f"[OpenAI RETRY] attempt {attempt}/{retries}: {e}. Retrying in {delay:.2f}s...")
-            if attempt == retries:
-                print(f"[OpenAI FAIL] giving up after {retries} attempts: {e}")
-                raise
-            await asyncio.sleep(delay)
-
-        except APIError as e:
-            print(f"[OpenAI API ERROR] {e}")
-            raise
-
-        except Exception as e:
-            print(f"[OpenAI UNEXPECTED] {e}\n{traceback.format_exc()}")
-            raise
+    embedding_length = 1536  # match typical embedding size
+    # generate a deterministic or random dummy embedding
+    dummy_embedding = [random.random() for _ in range(embedding_length)]
+    await asyncio.sleep(0.01)  # simulate async call
+    return dummy_embedding
 
 
 # ---------------------------

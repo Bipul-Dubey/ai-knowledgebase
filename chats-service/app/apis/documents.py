@@ -60,38 +60,45 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 
 
 # =======================
-# 🌐 2️⃣ Submit URL
+# 🌐 2️⃣ Upload URLs
 # =======================
-class URLSubmitRequest(BaseModel):
+class URLItem(BaseModel):
     url: HttpUrl
     title: Optional[str] = None
 
-@router.post("/url")
-async def submit_url(request: Request, body: URLSubmitRequest):
+class URLSubmitRequest(BaseModel):
+    urls: List[URLItem]
+
+@router.post("/urls")
+async def submit_urls(request: Request, body: URLSubmitRequest):
     claims = getattr(request.state, "claims", None)
     if not claims:
         return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
 
     org_id = claims.get("organization_id")
-    user_id = claims.get("user_id")
+
+    # Prepare the values for bulk insert
+    values = [(org_id, item.url, item.title or None) for item in body.urls]
+
+    # Dynamically generate placeholders: (%s,%s,%s),(%s,%s,%s),...
+    placeholders = ", ".join(["(%s, %s, %s, 'active', NOW())"] * len(values))
+    flat_values = [val for tup in values for val in tup]  # flatten list of tuples
 
     try:
         async with get_db_cursor() as cur:
-            await cur.execute(
-                """
+            query = f"""
                 INSERT INTO urls (organization_id, url, title, status, created_at)
-                VALUES (%s, %s, %s, 'active', NOW())
+                VALUES {placeholders}
                 RETURNING *
-                """,
-                (org_id, body.url, body.title)
-            )
-            record = await cur.fetchone()
+            """
+            await cur.execute(query, flat_values)
+            records = await cur.fetchall()
 
-        return APIResponse(False, "URL submitted successfully", record, status.HTTP_200_OK)
+        return APIResponse(False, "URLs submitted successfully", records, status.HTTP_200_OK)
 
     except Exception as e:
         print(f"[URL SUBMIT ERROR] {e}")
-        return APIResponse(True, f"Failed to process URL: {str(e)}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return APIResponse(True, f"Failed to process URLs: {str(e)}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @router.get("/download/{document_id}")

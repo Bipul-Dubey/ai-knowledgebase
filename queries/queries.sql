@@ -177,6 +177,8 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     chunk_index INT NOT NULL,
     chunk_text TEXT NOT NULL,
+    source_type VARCHAR(20) DEFAULT 'document',
+    url_id UUID,
     embedding vector(1536),            -- pgvector column
     embedding_model VARCHAR(100),
     token_count INT,
@@ -186,6 +188,8 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 );
 
 -- Indexes on chunks
+CREATE INDEX IF NOT EXISTS idx_document_chunks_url ON document_chunks(url_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_source_type ON document_chunks(source_type);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_org ON document_chunks(organization_id);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_doc ON document_chunks(document_id);
 -- ivfflat index for vector search (requires REINDEX or analyze when large)
