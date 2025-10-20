@@ -99,9 +99,7 @@ CREATE TABLE IF NOT EXISTS training_jobs (
     total_documents INT DEFAULT 0,
     total_chunks INT DEFAULT 0,
     progress_percent NUMERIC(5,2) DEFAULT 0,
-    retry_count INT DEFAULT 0,
     error_message TEXT,
-    started_at TIMESTAMP WITH TIME ZONE,
     finished_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -117,7 +115,6 @@ CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    account_id BIGINT,
     file_name VARCHAR(1024) NOT NULL,
     file_type VARCHAR(100),
     file_size BIGINT,
@@ -125,8 +122,6 @@ CREATE TABLE IF NOT EXISTS documents (
     s3_url TEXT,
     s3_url_expires_at TIMESTAMP WITH TIME ZONE,
     status VARCHAR(20) DEFAULT 'pending',
-    trained_at TIMESTAMP WITH TIME ZONE,
-    training_job_id UUID REFERENCES training_jobs(id),
     file_hash VARCHAR(128),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -168,8 +163,6 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     url_id UUID,
     embedding vector(1536),
     embedding_model VARCHAR(100),
-    token_count INT,
-    content_hash VARCHAR(128),
     metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     chunk_text_tsv tsvector
@@ -277,38 +270,6 @@ CREATE TABLE IF NOT EXISTS attachments (
 
 CREATE INDEX IF NOT EXISTS idx_attachments_org ON attachments(organization_id);
 
--- ========================
--- Queries & Query Results
--- ========================
-CREATE TABLE IF NOT EXISTS queries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id),
-    query_text TEXT,
-    query_embedding vector(1536),
-    model_used VARCHAR(100),
-    query_type VARCHAR(50) DEFAULT 'org',
-    status VARCHAR(20) DEFAULT 'pending',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_queries_org ON queries(organization_id);
-CREATE INDEX IF NOT EXISTS idx_queries_status ON queries(status);
-CREATE INDEX IF NOT EXISTS idx_queries_embedding_ivfflat
-  ON queries USING ivfflat (query_embedding vector_cosine_ops)
-  WITH (lists = 50);
-
-CREATE TABLE IF NOT EXISTS query_results (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    query_id UUID NOT NULL REFERENCES queries(id) ON DELETE CASCADE,
-    chunk_id UUID NOT NULL REFERENCES document_chunks(id) ON DELETE CASCADE,
-    rank INT,
-    score DOUBLE PRECISION,
-    retrieved_text TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_query_results_query ON query_results(query_id);
 
 -- ========================
 -- Trigger: auto-update "updated_at"
@@ -361,6 +322,33 @@ CREATE POLICY chats_tenant_isolation ON chats
 
 CREATE POLICY document_chunks_tenant_isolation ON document_chunks
   USING (organization_id = current_organization());
+
+-- ========================
+-- Token Usage (for analytics / billing)
+-- ========================
+CREATE TABLE IF NOT EXISTS token_usage (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    chat_id UUID REFERENCES chats(id) ON DELETE SET NULL,
+    document_id UUID REFERENCES documents(id) ON DELETE SET NULL,
+    query_id UUID REFERENCES queries(id) ON DELETE SET NULL,
+
+    usage_type VARCHAR(50) NOT NULL,   -- 'embedding', 'chat', 'query', 'summary', etc.
+    model VARCHAR(100),                -- e.g. gpt-4o-mini, text-embedding-3-large
+    prompt_tokens INT DEFAULT 0,
+    completion_tokens INT DEFAULT 0,
+    total_tokens INT GENERATED ALWAYS AS (prompt_tokens + completion_tokens) STORED,
+
+    cost NUMERIC(10,6),                -- store actual cost (optional, per API pricing)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    metadata JSONB                     -- can hold request_id, response_time, etc.
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_usage_org ON token_usage(organization_id);
+CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id);
+CREATE INDEX IF NOT EXISTS idx_token_usage_chat ON token_usage(chat_id);
+CREATE INDEX IF NOT EXISTS idx_token_usage_usage_type ON token_usage(usage_type);  
 
 -- ====================================================
 -- ✅ Done: Complete, production-ready schema
