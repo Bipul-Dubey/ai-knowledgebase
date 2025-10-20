@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Union
 from bs4 import BeautifulSoup
 from app.helpers.s3_storage import download_file_from_s3
-
+from requests.adapters import HTTPAdapter, Retry
 
 class FileManager:
     """
@@ -20,9 +20,6 @@ class FileManager:
     # ---------------------------
     @staticmethod
     async def download_to_tempfile(s3_key: str) -> str:
-        """
-        Download S3 file to a temporary local file and return the path.
-        """
         content = await download_file_from_s3(s3_key)
         ext = Path(s3_key).suffix or ".bin"
 
@@ -35,10 +32,21 @@ class FileManager:
     @staticmethod
     def download_url_to_tempfile(url: str) -> str:
         """
-        Download content from a URL into a temporary file.
+        Download content from a URL into a temporary file with retries and user-agent headers.
         """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/141.0.0.0 Safari/537.36"
+        }
+
+        session = requests.Session()
+        retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+        session.mount("https://", HTTPAdapter(max_retries=retries))
+        session.mount("http://", HTTPAdapter(max_retries=retries))
+
         try:
-            response = requests.get(url, timeout=20)
+            response = session.get(url, headers=headers, timeout=20)
             response.raise_for_status()
         except Exception as e:
             raise ValueError(f"Failed to download from URL: {url} ({e})")

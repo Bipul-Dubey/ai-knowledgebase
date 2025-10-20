@@ -1,8 +1,7 @@
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from app.database.helpers import get_db_cursor
 
-# Cost mapping based on OpenAI pricing (as of Oct 2025)
 OPENAI_PRICING = {
     "text-embedding-3-small": {"prompt": 0.00002, "completion": 0.0},
     "text-embedding-3-large": {"prompt": 0.00013, "completion": 0.0},
@@ -17,16 +16,17 @@ def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int = 0) -
 
 async def record_token_usage(
     organization_id: str,
+    user_id: str,
     usage_type: str,
     model: str,
     prompt_tokens: int = 0,
     completion_tokens: int = 0,
-    user_id: Optional[str] = None,
-    chat_id: Optional[str] = None,
-    document_id: Optional[str] = None,
-    query_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata: Optional[Dict] = None,
 ):
+    """
+    Add token usage per organization and user only.
+    Each call inserts a new row and accumulates usage over time.
+    """
     cost = calculate_cost(model, prompt_tokens, completion_tokens)
     async with get_db_cursor(commit=True) as cur:
         await cur.execute(
@@ -34,9 +34,6 @@ async def record_token_usage(
             INSERT INTO token_usage (
                 organization_id,
                 user_id,
-                chat_id,
-                document_id,
-                query_id,
                 usage_type,
                 model,
                 prompt_tokens,
@@ -44,14 +41,11 @@ async def record_token_usage(
                 cost,
                 metadata
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             (
                 organization_id,
                 user_id,
-                chat_id,
-                document_id,
-                query_id,
                 usage_type,
                 model,
                 prompt_tokens,

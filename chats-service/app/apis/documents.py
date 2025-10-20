@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Request, UploadFile, File, status
+from fastapi import APIRouter, Request, UploadFile, File, status, HTTPException, Query
 from app.utils.response import APIResponse
 from app.database.helpers import get_db_cursor
 from app.helpers.s3_storage import upload_file_to_s3, get_presigned_url
 from app.helpers.train_document import run_training_job
 from pydantic import BaseModel, HttpUrl
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
@@ -97,7 +97,11 @@ async def submit_urls(request: Request, body: URLSubmitRequest):
 
     try:
         async with get_db_cursor(commit=True) as cur:
-            values = [(org_id, item.url, item.title or None, 'active', datetime.utcnow()) for item in body.urls]
+            # Convert HttpUrl to str
+            values = [
+                (org_id, str(item.url), item.title or None, 'active', datetime.utcnow())
+                for item in body.urls
+            ]
             placeholders = ", ".join(["(%s,%s,%s,%s,%s)"] * len(values))
             flat_values = [v for tup in values for v in tup]
 
@@ -189,11 +193,11 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
         # Fetch all if no IDs provided
         if not document_ids and not url_ids:
             async with get_db_cursor() as cur:
-                await cur.execute("SELECT id FROM documents WHERE organization_id=%s", (org_id,))
+                await cur.execute("SELECT id FROM documents WHERE organization_id=%s AND trainable = TRUE", (org_id,))
                 docs = await cur.fetchall()
                 document_ids = [d["id"] for d in docs]
 
-                await cur.execute("SELECT id FROM urls WHERE organization_id=%s", (org_id,))
+                await cur.execute("SELECT id FROM urls WHERE organization_id=%s AND trainable = TRUE", (org_id,))
                 urls = await cur.fetchall()
                 url_ids = [u["id"] for u in urls]
 
@@ -226,3 +230,127 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
     except Exception as e:
         print(f"[TRAIN ENDPOINT ERROR] {e}")
         return APIResponse(True, "Failed to create training job", {"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# =======================
+# GET Resources
+# =======================
+@router.get("/resources")
+async def list_resources(
+    request: Request,
+    resource_type: Optional[str] = Query(None, description="Filter by 'document' or 'url'"),
+    status_filter: Optional[str] = Query(None, description="Filter by status"),
+    limit: int = 50,
+    offset: int = 0,
+):
+    """
+    List organization resources (documents and URLs) in one API.
+    Optional filters:
+    - resource_type: 'document' or 'url'
+    - status_filter: status of document/url
+    """
+    claims = getattr(request.state, "claims", None)
+    if not claims:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    org_id = claims.get("organization_id")
+
+    data = {}
+
+    async with get_db_cursor() as cur:
+        # ----------------------------
+        # Fetch documents
+        # ----------------------------
+        if resource_type in (None, "document"):
+            doc_query = """
+                SELECT id, file_name AS name, file_type, file_size, status, created_at, updated_at, metadata
+                FROM documents
+                WHERE organization_id = %s
+            """
+            params = [org_id]
+            if status_filter:
+                doc_query += " AND status = %s"
+                params.append(status_filter)
+            doc_query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+
+            await cur.execute(doc_query, tuple(params))
+            documents = await cur.fetchall()
+            data["documents"] = documents
+
+        # ----------------------------
+        # Fetch URLs
+        # ----------------------------
+        if resource_type in (None, "url"):
+            url_query = """
+                SELECT id, url AS name, title, status, last_fetched_at, created_at, metadata
+                FROM urls
+                WHERE organization_id = %s
+            """
+            params = [org_id]
+            if status_filter:
+                url_query += " AND status = %s"
+                params.append(status_filter)
+            url_query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+
+            await cur.execute(url_query, tuple(params))
+            urls = await cur.fetchall()
+            data["urls"] = urls
+
+    return APIResponse(False, "Resources fetched successfully", data)
+
+
+
+# ===========
+# Trainable
+# ===========
+class TrainableItem(BaseModel):
+    entity_type: Literal["document", "url"]
+    id: str
+    trainable: bool
+
+class TrainableUpdateBulkRequest(BaseModel):
+    items: List[TrainableItem]
+
+# ----------------------------
+# API Endpoint
+# ----------------------------
+@router.patch("/set-trainable-bulk")
+async def set_trainable_bulk(request: Request, body: TrainableUpdateBulkRequest):
+    claims = getattr(request.state, "claims", None)
+    if not claims:
+        return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
+
+    org_id = claims.get("organization_id")
+    updated_ids = []
+
+    table_map = {
+        "document": "documents",
+        "url": "urls"
+    }
+
+    try:
+        async with get_db_cursor(commit=True) as cur:
+            for item in body.items:
+                table_name = table_map[item.entity_type]
+                await cur.execute(
+                    f"""
+                    UPDATE {table_name}
+                    SET trainable = %s,
+                        updated_at = NOW()
+                    WHERE organization_id = %s AND id = %s
+                    """,
+                    (item.trainable, org_id, item.id)
+                )
+                updated_ids.append(item.id)
+
+        return APIResponse(
+            False,
+            "Trainable flags updated successfully",
+            {"updated_ids": updated_ids},
+            status.HTTP_200_OK
+        )
+
+    except Exception as e:
+        print(f"[SET TRAINABLE BULK ERROR] {e}")
+        return APIResponse(True, "Failed to update trainable flags", {"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)

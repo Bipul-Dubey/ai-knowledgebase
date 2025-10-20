@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS documents (
     s3_url_expires_at TIMESTAMP WITH TIME ZONE,
     status VARCHAR(20) DEFAULT 'pending',
     file_hash VARCHAR(128),
+    trainable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     metadata JSONB
@@ -144,7 +145,9 @@ CREATE TABLE IF NOT EXISTS urls (
     status VARCHAR(20) DEFAULT 'active',
     last_fetched_at TIMESTAMP WITH TIME ZONE,
     fetched_hash VARCHAR(128),
+    trainable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     metadata JSONB
 );
 
@@ -155,12 +158,12 @@ CREATE INDEX IF NOT EXISTS idx_urls_org ON urls(organization_id);
 -- ========================
 CREATE TABLE IF NOT EXISTS document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     chunk_index INT NOT NULL,
     chunk_text TEXT NOT NULL,
     source_type VARCHAR(20) DEFAULT 'document',
-    url_id UUID,
+    url_id UUID REFERENCES urls(id) ON DELETE CASCADE,
     embedding vector(1536),
     embedding_model VARCHAR(100),
     metadata JSONB,
@@ -330,26 +333,22 @@ CREATE TABLE IF NOT EXISTS token_usage (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    chat_id UUID REFERENCES chats(id) ON DELETE SET NULL,
-    document_id UUID REFERENCES documents(id) ON DELETE SET NULL,
-    query_id UUID REFERENCES queries(id) ON DELETE SET NULL,
-
-    usage_type VARCHAR(50) NOT NULL,   -- 'embedding', 'chat', 'query', 'summary', etc.
+    
+    usage_type VARCHAR(50) NOT NULL,   -- 'embedding', 'chat', etc.
     model VARCHAR(100),                -- e.g. gpt-4o-mini, text-embedding-3-large
     prompt_tokens INT DEFAULT 0,
     completion_tokens INT DEFAULT 0,
     total_tokens INT GENERATED ALWAYS AS (prompt_tokens + completion_tokens) STORED,
-
-    cost NUMERIC(10,6),                -- store actual cost (optional, per API pricing)
+    
+    cost NUMERIC(10,6) DEFAULT 0,      -- actual cost
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    metadata JSONB                     -- can hold request_id, response_time, etc.
+    metadata JSONB                     -- optional: request_id, response_time, etc.
 );
 
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_token_usage_org ON token_usage(organization_id);
 CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id);
-CREATE INDEX IF NOT EXISTS idx_token_usage_chat ON token_usage(chat_id);
-CREATE INDEX IF NOT EXISTS idx_token_usage_usage_type ON token_usage(usage_type);  
-
+CREATE INDEX IF NOT EXISTS idx_token_usage_usage_type ON token_usage(usage_type);
 -- ====================================================
 -- ✅ Done: Complete, production-ready schema
 -- ====================================================

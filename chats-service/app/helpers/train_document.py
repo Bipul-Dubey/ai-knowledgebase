@@ -6,6 +6,7 @@ from app.helpers.file_manager import FileManager
 from app.core.config import settings
 import app.database.postgres_client as pg
 from app.helpers.get_embedding_with_retry import get_embedding_with_retry
+
 # ---------------------------
 # PostgreSQL Initialization
 # ---------------------------
@@ -90,7 +91,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
     if document_ids:
         async with get_db_cursor() as cur:
             await cur.execute(
-                "SELECT id, s3_key, file_name FROM documents WHERE organization_id = %s AND id = ANY(%s)",
+                "SELECT id, s3_key, file_name FROM documents WHERE organization_id = %s AND id = ANY(%s) AND trainable = TRUE",
                 (org_id, document_ids)
             )
             docs = await cur.fetchall()
@@ -106,7 +107,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
     if url_ids:
         async with get_db_cursor() as cur:
             await cur.execute(
-                "SELECT id, url, title FROM urls WHERE organization_id = %s AND id = ANY(%s)",
+                "SELECT id, url, title FROM urls WHERE organization_id = %s AND id = ANY(%s) AND trainable = TRUE",
                 (org_id, url_ids)
             )
             urls = await cur.fetchall()
@@ -123,6 +124,10 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
         src_id = src["id"]
         src_type = src["type"]
 
+        # Mark as processing
+        if src_type == "document":
+            await update_document_status(src_id, "processing")
+
         try:
             content = await FileManager.get_text_from_source(src)
         except Exception as e:
@@ -137,10 +142,10 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
         embeddings = []
         src_failed = False
 
-        # Generate embeddings with token usage tracking
-        for idx, ch in enumerate(chunks):
+        # Generate embeddings (with internal token tracking)
+        for idx, chunk in enumerate(chunks):
             try:
-                emb = await get_embedding_with_retry(ch, org_id, user_id, doc_id=src_id)
+                emb = await get_embedding_with_retry(chunk, org_id, user_id)
                 embeddings.append(emb)
             except Exception as e:
                 msg = f"[EMBED FAIL] {src_type} {src_id}, chunk {idx}: {e}"
@@ -150,7 +155,8 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
                 break
 
         if src_failed:
-            await update_document_status(src_id, "failed", "Embedding failed")
+            if src_type == "document":
+                await update_document_status(src_id, "failed", "Embedding failed")
             continue
 
         # Insert chunks into DB
@@ -161,7 +167,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
                 elif src_type == "url":
                     await cur.execute("DELETE FROM document_chunks WHERE url_id=%s", (src_id,))
 
-                for idx, ch in enumerate(chunks):
+                for idx, chunk in enumerate(chunks):
                     emb_literal = "[" + ",".join(map(str, embeddings[idx])) + "]"
                     await cur.execute(
                         """
@@ -175,7 +181,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
                             src_id if src_type == "url" else None,
                             org_id,
                             idx,
-                            ch,
+                            chunk,
                             emb_literal,
                             "text-embedding-3-small",
                             src_type,
@@ -183,7 +189,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
                     )
 
             if src_type == "document":
-                await update_document_status(src_id, "active", None)
+                await update_document_status(src_id, "active")
 
             total_chunks += len(chunks)
             completed_docs += 1
@@ -209,7 +215,6 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
 
     await update_training_job_status(job_id, final_status, total_chunks=total_chunks, completed_documents=completed_docs)
     print(f"🏁 Job {job_id} finished → {final_status} | {completed_docs} sources | {total_chunks} chunks")
-
 
 # ---------------------------
 # Celery Task Entry

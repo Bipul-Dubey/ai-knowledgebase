@@ -131,3 +131,36 @@ async def get_chat_messages(chat_id: str, request: Request):
         message="Chat messages fetched successfully",
         data={"messages": rows},
     )
+
+# --------------------------
+# Delete Chat
+# --------------------------
+@router.delete("/{chat_id}")
+async def delete_chat(chat_id: str, request: Request):
+    """
+    Delete a chat and all its messages and attachments.
+    Organization ID and user ID are taken from JWT claims for multi-tenant safety.
+    """
+    claims = getattr(request.state, "claims", None)
+    if not claims:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    org_id = claims.get("organization_id")
+
+    async with get_db_cursor() as cur:
+        # Check if chat exists and belongs to the user's org
+        await cur.execute(
+            "SELECT id FROM chats WHERE id=%s AND organization_id=%s",
+            (chat_id, org_id),
+        )
+        chat = await cur.fetchone()
+        if not chat:
+            return APIResponse(True, "Chat not found or not authorized", None, 404)
+
+        # Delete the chat (messages & attachments will cascade)
+        await cur.execute(
+            "DELETE FROM chats WHERE id=%s AND organization_id=%s",
+            (chat_id, org_id),
+        )
+
+    return APIResponse(False, "Chat deleted successfully", {"chat_id": chat_id})

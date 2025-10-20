@@ -101,7 +101,7 @@ async def query_rag_openai_stream(
         if c["document_id"]:
             sources.append({"type": "document", "id": str(c["document_id"])})
         elif c["url_id"]:
-            sources.append({"type": "url", "url": c["url_id"]})
+            sources.append({"type": "url", "id": str(c["url_id"])})
 
     # Send sources first
     yield {"event": "sources", "sources": sources, "chatId": str(chat_id)}
