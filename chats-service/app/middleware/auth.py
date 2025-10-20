@@ -17,6 +17,12 @@ JWT_ALGORITHM = "HS256"
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # 🔹 Skip auth for docs & OpenAPI
+        if request.url.path.startswith("/docs") or \
+           request.url.path.startswith("/redoc") or \
+           request.url.path.startswith("/openapi.json"):
+            return await call_next(request)
+
         try:
             # 🔹 1. Validate Authorization header
             auth_header = request.headers.get("Authorization")
@@ -65,7 +71,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
             if user["status"] != "active":
-                raise HTTPException(status_code=403, detail="User is not active")  # 403 makes more sense
+                raise HTTPException(status_code=403, detail="User is not active")
             if user["token_version"] != token_version:
                 raise HTTPException(status_code=401, detail="Token invalid due to password change")
 
@@ -82,7 +88,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
 
         except Exception as e:
-            # Internal server error
             print("🔥 Unexpected Auth Middleware Error:", e)
             traceback.print_exc()
             return JSONResponse(

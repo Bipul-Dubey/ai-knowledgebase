@@ -1,5 +1,5 @@
 # app/api/chats.py
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Request, status, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -95,3 +95,39 @@ async def chat_query_sse(payload: ChatQuerySchema, request: Request):
             yield f"data: {json.dumps({'event': 'error', 'content': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# --------------------------
+# Chat Meesages Endpoint
+# --------------------------
+@router.get("/{chat_id}")
+async def get_chat_messages(chat_id: str, request: Request):
+    """
+    Fetch all messages for a given chat.
+    Organization ID and user ID are taken from JWT claims for multi-tenant safety.
+    """
+    claims = getattr(request.state, "claims", None)
+    if not claims:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
+
+    org_id = claims.get("organization_id")
+
+    async with get_db_cursor() as cur:
+        await cur.execute(
+            """
+            SELECT id, role, content, created_at
+            FROM messages
+            WHERE chat_id=%s AND organization_id=%s
+            ORDER BY created_at ASC
+            """,
+            (chat_id, org_id),
+        )
+        rows = await cur.fetchall()
+
+    return APIResponse(
+        error=False,
+        message="Chat messages fetched successfully",
+        data={"messages": rows},
+    )
