@@ -59,6 +59,7 @@ class ChatQuerySchema(BaseModel):
     urlId: str | None = None
 
 @router.post("/query")
+@router.post("/query")
 async def chat_query_sse(payload: ChatQuerySchema, request: Request):
     claims = getattr(request.state, "claims", None)
     if not claims:
@@ -76,11 +77,11 @@ async def chat_query_sse(payload: ChatQuerySchema, request: Request):
         new_chat_created = False
 
     async def event_generator():
-        # First event: send chatId to frontend
+        # Send chat_id first (helps frontend initialize UI immediately)
         yield f"data: {json.dumps({'event': 'chat_id', 'chatId': str(chat_id), 'new': new_chat_created})}\n\n"
+        await asyncio.sleep(0)
 
         try:
-            # Stream RAG + OpenAI response
             async for event in query_rag_openai_stream(
                 org_id=org_id,
                 user_id=user_id,
@@ -89,14 +90,23 @@ async def chat_query_sse(payload: ChatQuerySchema, request: Request):
                 document_id=payload.documentId,
                 url_id=payload.urlId,
             ):
-                yield f"data: {json.dumps(event)}\n\n"
-                await asyncio.sleep(0.01)
+                # Always send line-by-line SSE
+                msg = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                yield msg.encode("utf-8")
+                await asyncio.sleep(0)
         except Exception as e:
-            yield f"data: {json.dumps({'event': 'error', 'content': str(e)})}\n\n"
+            error_event = {"event": "error", "content": str(e)}
+            yield f"data: {json.dumps(error_event)}\n\n".encode("utf-8")
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering if used
+        },
+    )
 # --------------------------
 # Chat Meesages Endpoint
 # --------------------------

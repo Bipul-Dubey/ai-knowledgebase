@@ -6,8 +6,10 @@ import textract
 from pathlib import Path
 from typing import List, Union
 from bs4 import BeautifulSoup
+from readability import Document
 from app.helpers.s3_storage import download_file_from_s3
 from requests.adapters import HTTPAdapter, Retry
+
 
 class FileManager:
     """
@@ -31,9 +33,6 @@ class FileManager:
 
     @staticmethod
     def download_url_to_tempfile(url: str) -> str:
-        """
-        Download content from a URL into a temporary file with retries and user-agent headers.
-        """
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                           "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -98,14 +97,42 @@ class FileManager:
             elif ext in [".html", ".htm"]:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     html = f.read()
-                soup = BeautifulSoup(html, "html.parser")
-                return soup.get_text(separator="\n", strip=True)
+                return FileManager.extract_text_from_html(html)
 
             else:
                 raise ValueError(f"Unsupported file type: {ext}")
 
         except Exception as e:
             raise ValueError(f"Text extraction failed for {file_path}: {e}")
+
+    # ---------------------------
+    # 🔹 HTML content extraction
+    # ---------------------------
+    @staticmethod
+    def extract_text_from_html(html: str) -> str:
+        """
+        Extract meaningful content from HTML using readability-lxml.
+        Fallback to <p> tags if no main content found.
+        """
+        try:
+            doc = Document(html)
+            main_html = doc.summary()  # returns main article HTML
+            soup = BeautifulSoup(main_html, "html.parser")
+
+            # Remove remaining scripts/styles
+            for tag in soup(["script", "style", "header", "footer", "nav", "aside"]):
+                tag.decompose()
+
+            # Get clean text
+            text_blocks = [t.strip() for t in soup.stripped_strings if t.strip()]
+            return "\n".join(text_blocks)
+
+        except Exception:
+            # Fallback: extract all <p>
+            soup = BeautifulSoup(html, "html.parser")
+            for tag in soup(["script", "style", "header", "footer", "nav", "aside"]):
+                tag.decompose()
+            return "\n".join([p.get_text(strip=True) for p in soup.find_all("p")])
 
     # ---------------------------
     # 🔹 Chunking
