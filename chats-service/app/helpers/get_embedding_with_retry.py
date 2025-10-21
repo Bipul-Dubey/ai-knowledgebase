@@ -37,11 +37,9 @@ async def get_embedding_with_retry(
                     await record_token_usage(
                         organization_id=org_id,
                         user_id=user_id,
-                        usage_type="embedding",
                         model=response.model,
                         prompt_tokens=usage.prompt_tokens,
                         completion_tokens=getattr(usage, "completion_tokens", 0),
-                        metadata={"timestamp": datetime.utcnow().isoformat()}
                     )
             except Exception as tu_err:
                 print(f"[TOKEN USAGE WARN] Failed to record token usage: {tu_err}")

@@ -185,6 +185,8 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_org ON document_chunks(organizati
 CREATE INDEX IF NOT EXISTS idx_document_chunks_source_type ON document_chunks(source_type);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_metadata_gin ON document_chunks USING GIN (metadata jsonb_path_ops);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_chunk_text_tsv ON document_chunks USING GIN (chunk_text_tsv);
+
+-- IVFFLAT index for 1536-d vectors
 CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding_ivfflat
   ON document_chunks USING ivfflat (embedding vector_cosine_ops)
   WITH (lists = 100);
@@ -330,25 +332,22 @@ CREATE POLICY document_chunks_tenant_isolation ON document_chunks
 -- Token Usage (for analytics / billing)
 -- ========================
 CREATE TABLE IF NOT EXISTS token_usage (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    
-    usage_type VARCHAR(50) NOT NULL,   -- 'embedding', 'chat', etc.
-    model VARCHAR(100),                -- e.g. gpt-4o-mini, text-embedding-3-large
-    prompt_tokens INT DEFAULT 0,
-    completion_tokens INT DEFAULT 0,
-    total_tokens INT GENERATED ALWAYS AS (prompt_tokens + completion_tokens) STORED,
-    
-    cost NUMERIC(10,6) DEFAULT 0,      -- actual cost
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    metadata JSONB                     -- optional: request_id, response_time, etc.
+
+    total_prompt_tokens BIGINT DEFAULT 0,
+    total_completion_tokens BIGINT DEFAULT 0,
+    total_tokens BIGINT GENERATED ALWAYS AS (total_prompt_tokens + total_completion_tokens) STORED,
+    total_cost NUMERIC(12,6) DEFAULT 0,
+
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+
+    PRIMARY KEY (organization_id, user_id)
 );
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_token_usage_org ON token_usage(organization_id);
 CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id);
-CREATE INDEX IF NOT EXISTS idx_token_usage_usage_type ON token_usage(usage_type);
 -- ====================================================
 -- ✅ Done: Complete, production-ready schema
 -- ====================================================
