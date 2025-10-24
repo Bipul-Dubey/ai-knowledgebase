@@ -1,5 +1,4 @@
-from typing import Optional, Dict
-from app.database.helpers import get_db_cursor
+from app.database.postgres_client import get_db_cursor
 
 # OpenAI pricing per 1K tokens
 OPENAI_PRICING = {

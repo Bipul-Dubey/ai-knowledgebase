@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, UploadFile, File, status, HTTPException, Query
 from app.utils.response import APIResponse
-from app.database.helpers import get_db_cursor
+from app.database.postgres_client import get_db_cursor
 from app.helpers.s3_storage import upload_file_to_s3, get_presigned_url
 from app.helpers.train_document import run_training_job
 from pydantic import BaseModel, HttpUrl

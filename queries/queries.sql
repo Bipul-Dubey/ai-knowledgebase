@@ -210,12 +210,35 @@ CREATE TRIGGER tsv_update_document_chunks
 CREATE TABLE IF NOT EXISTS chunk_relations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     from_chunk_id UUID NOT NULL REFERENCES document_chunks(id) ON DELETE CASCADE,
-    to_chunk_id UUID NOT NULL REFERENCES document_chunks(id) ON DELETE CASCADE,
+    to_chunk_id   UUID NOT NULL REFERENCES document_chunks(id) ON DELETE CASCADE,
     relation_type VARCHAR(50),
-    score DOUBLE PRECISION,
+    score DOUBLE PRECISION CHECK (score >= 0 AND score <= 1),
     metadata JSONB,
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    source_id UUID NOT NULL,
+    source_type VARCHAR(50) CHECK (source_type IN ('document', 'url')),
+    version INT DEFAULT 1,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+-- ============================================
+-- ✅ Indexes for Query Performance
+-- ============================================
+-- Fast lookup by org and source
+CREATE INDEX IF NOT EXISTS idx_chunk_relations_org_source
+    ON chunk_relations (org_id, source_id, source_type);
+
+-- Efficient relation traversal
+CREATE INDEX IF NOT EXISTS idx_chunk_relations_from_chunk
+    ON chunk_relations (from_chunk_id);
+
+CREATE INDEX IF NOT EXISTS idx_chunk_relations_to_chunk
+    ON chunk_relations (to_chunk_id);
+
+-- Optimize graph traversal + scoring
+CREATE INDEX IF NOT EXISTS idx_chunk_relations_score
+    ON chunk_relations (score DESC);
+
 
 -- ========================
 -- Chats

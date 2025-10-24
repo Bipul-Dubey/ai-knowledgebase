@@ -1,8 +1,8 @@
 import asyncio
 import traceback
-from datetime import datetime
 from celery import Celery
-from app.database.helpers import get_db_cursor
+from celery.signals import worker_process_init
+from app.database.postgres_client import get_db_cursor
 from app.helpers.file_manager import FileManager
 from app.helpers.get_embedding_with_retry import get_embedding_with_retry
 from app.core.config import settings
@@ -15,18 +15,12 @@ import uuid
 # ---------------------------
 # PostgreSQL Initialization
 # ---------------------------
-async def init_pg():
-    if pg.db is None:
-        await pg.init_db()
-
-def safe_init_pg():
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(init_pg())
-    except RuntimeError:
-        asyncio.run(init_pg())
-
-safe_init_pg()
+@worker_process_init.connect
+def init_worker_db(**kwargs):
+    """
+    Initialize PostgreSQL pool once per Celery worker process.
+    """
+    asyncio.run(pg.init_db())
 
 # ---------------------------
 # Celery Setup
@@ -230,7 +224,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
             sources.append({"id": u["id"], "type": "url", "url": u["url"], "title": u["title"]})
 
     # -----------------------
-    # Process each source
+    # Process each source (logic unchanged)
     # -----------------------
     for src in sources:
         src_id = src["id"]
@@ -312,14 +306,8 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
 
                 # Insert new chunks
                 for idx, chunk in enumerate(chunks):
-                    # build a numeric literal for pgvector insertion (floats only)
-                    try:
-                        # Use float conversion to avoid string types
-                        vec = [float(v) for v in embeddings[idx]]
-                        emb_literal = "[" + ",".join(map(str, vec)) + "]"
-                    except Exception as e:
-                        raise ValueError(f"Failed to convert embedding to floats for chunk {idx}: {e}")
-
+                    vec = [float(v) for v in embeddings[idx]]
+                    emb_literal = "[" + ",".join(map(str, vec)) + "]"
                     await cur.execute(
                         """
                         INSERT INTO document_chunks
@@ -342,10 +330,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
                     row = await cur.fetchone()
                     chunk_ids.append(row["id"])
 
-                # Generate semantic relations within source (pairwise)
-                  # -----------------------
-                # Delete old relations for this source & org (retrain cleanup)
-                # -----------------------
+                # Delete old relations
                 await cur.execute(
                     "DELETE FROM chunk_relations WHERE org_id=%s AND source_id=%s AND source_type=%s",
                     (org_id, src_id, src_type)
@@ -365,15 +350,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
                                     (from_chunk_id, to_chunk_id, relation_type, score, org_id, source_id, source_type, created_at)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                                 """,
-                                (
-                                    chunk_ids[i],
-                                    chunk_ids[j],
-                                    "semantic",
-                                    float(score),
-                                    org_uuid,
-                                    src_uuid,
-                                    src_type
-                                )
+                                (chunk_ids[i], chunk_ids[j], "semantic", float(score), org_uuid, src_uuid, src_type)
                             )
 
             if src_type == "document":
@@ -384,10 +361,7 @@ async def train_sources(job_id, org_id, user_id, document_ids=None, url_ids=None
             total_chunks += len(chunks)
             completed_docs += 1
             any_success = True
-
-            await update_training_job_status(
-                job_id, "running", total_chunks=total_chunks, completed_documents=completed_docs
-            )
+            await update_training_job_status(job_id, "running", total_chunks=total_chunks, completed_documents=completed_docs)
 
         except Exception as e:
             msg = f"[DB FAIL] Failed to insert chunks for {src_type} {src_id}: {e}"

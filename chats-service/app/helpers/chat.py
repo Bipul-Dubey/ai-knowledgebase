@@ -1,4 +1,4 @@
-from app.database.helpers import get_db_cursor
+from app.database.postgres_client import get_db_cursor
 import uuid
 
 # Save message and update last_message_at

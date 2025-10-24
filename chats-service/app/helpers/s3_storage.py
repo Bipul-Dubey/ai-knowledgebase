@@ -4,7 +4,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from datetime import datetime, timedelta, timezone
 import uuid
 from app.core.config import settings
-from app.database.helpers import get_db_cursor
+from app.database.postgres_client import get_db_cursor
 import asyncio
 
 # ==========================

@@ -4,11 +4,10 @@ import traceback
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
-from starlette import status
 from jwt import ExpiredSignatureError, InvalidTokenError, DecodeError
 from psycopg import OperationalError, InterfaceError
 
-from app.database.helpers import get_db_cursor
+from app.database.postgres_client import get_db_cursor
 from app.utils.response import APIResponse
 
 JWT_SECRET = os.getenv("JWT_SECRET", "YOUR_SUPER_SECRET_KEY")
