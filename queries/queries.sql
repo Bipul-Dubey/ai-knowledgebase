@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS urls (
     fetched_hash VARCHAR(128),
     trainable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     metadata JSONB
 );
 
@@ -214,7 +214,7 @@ CREATE TABLE IF NOT EXISTS chunk_relations (
     relation_type VARCHAR(50),
     score DOUBLE PRECISION CHECK (score >= 0 AND score <= 1),
     metadata JSONB,
-    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     source_id UUID NOT NULL,
     source_type VARCHAR(50) CHECK (source_type IN ('document', 'url')),
     version INT DEFAULT 1,
@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS chunk_relations (
 -- ============================================
 -- Fast lookup by org and source
 CREATE INDEX IF NOT EXISTS idx_chunk_relations_org_source
-    ON chunk_relations (org_id, source_id, source_type);
+    ON chunk_relations (organization_id, source_id, source_type);
 
 -- Efficient relation traversal
 CREATE INDEX IF NOT EXISTS idx_chunk_relations_from_chunk
