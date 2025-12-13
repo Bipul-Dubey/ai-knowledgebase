@@ -47,4 +47,4 @@ async def fetch_recent_messages(chat_id: str, limit: int = 20):
             (chat_id, limit)
         )
         rows = await cur.fetchall()
-    return list(reversed(rows))  # chronological
+    return list(reversed(rows))

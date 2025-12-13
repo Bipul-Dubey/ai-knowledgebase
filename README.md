@@ -9,15 +9,14 @@ Keep secrets (like DB password) outside the repo by using local `.env` files or 
 
 ## 🌍 Common Environment Variables
 
-| Variable        | Example Value                        | Description                               |
-| --------------- | ------------------------------------ | ----------------------------------------- |
-| **DB_HOST**     | `localhost` / `host.docker.internal` | Database host                             |
-| **DB_PORT**     | `5432`                               | Database port                             |
-| **DB_USER**     | `postgres`                           | Database username                         |
-| **DB_PASSWORD** | `root`                               | Database password                         |
-| **DB_NAME**     | `ai_knowledgebase`                   | Database name                             |
-| **PORT**        | `8080`, `8081`, `50051`              | Service port                              |
-| **GRPC_HOST**   | `ai-service:50051`                   | gRPC service host (used in chats-service) |
+| Variable        | Example Value                        | Description       |
+| --------------- | ------------------------------------ | ----------------- |
+| **DB_HOST**     | `localhost` / `host.docker.internal` | Database host     |
+| **DB_PORT**     | `5432`                               | Database port     |
+| **DB_USER**     | `postgres`                           | Database username |
+| **DB_PASSWORD** | `root`                               | Database password |
+| **DB_NAME**     | `ai_knowledgebase`                   | Database name     |
+| **PORT**        | `8080`, `8081`, `50051`              | Service port      |
 
 ---
 

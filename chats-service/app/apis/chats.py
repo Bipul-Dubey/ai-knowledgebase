@@ -57,10 +57,9 @@ async def get_chats_list(request: Request):
 # Chat Query SSE Endpoint
 # --------------------------
 class ChatQuerySchema(BaseModel):
-    chatId: str | None = None  # Optional: existing chat
+    chatId: str | None = None
     message: str
     documentId: str | None = None
-    urlId: str | None = None
 
 @router.post("/query")
 async def chat_query_sse(payload: ChatQuerySchema, request: Request):
@@ -91,7 +90,6 @@ async def chat_query_sse(payload: ChatQuerySchema, request: Request):
                 chat_id=chat_id,
                 user_message=payload.message,
                 document_id=payload.documentId,
-                url_id=payload.urlId,
             ):
                 # Always send line-by-line SSE
                 msg = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
