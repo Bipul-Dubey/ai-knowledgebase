@@ -83,3 +83,7 @@ Thumbs.db
 
 # Environment variables
 .env
+
+
+# ignore local files
+local_data/

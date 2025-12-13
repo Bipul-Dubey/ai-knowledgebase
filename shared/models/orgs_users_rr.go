@@ -64,22 +64,22 @@ type InviteUserRequest struct {
 }
 
 type InviteUserResponse struct {
-	UserID         uuid.UUID  `json:"user_id"`
-	Email          string     `json:"email"`
-	Name           string     `json:"name"`
-	Role           string     `json:"role"`
-	Status         string     `json:"status"`
-	InviteToken    string     `json:"invite_token"`
-	ExpiresAt      *time.Time `json:"expires_at"`
-	InvitedBy      uuid.UUID  `json:"invited_by"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	Email      string     `json:"email"`
+	Name       string     `json:"name"`
+	Role       string     `json:"role"`
+	Status     string     `json:"status"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	InviteLink string     `json:"invite_link"`
 	// ⚡️ Send invite email to Email with InviteToken link
 }
 
 type AcceptInviteRequest struct {
-	Token    string `json:"token" validate:"required"`
-	Name     string `json:"name" validate:"required"`
-	Password string `json:"password" validate:"required,min=8"`
+	Name      string `json:"name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6"`
+	AccountID string `json:"account_id" binding:"required"`
+	Token     string `json:"token" binding:"required"`
 }
 
 type AcceptInviteResponse struct {
@@ -90,11 +90,6 @@ type AcceptInviteResponse struct {
 	Role           string    `json:"role"`
 	Status         string    `json:"status"`
 	IsVerified     bool      `json:"is_verified"`
-	// ⚡️ Send welcome email after activation
-}
-
-type ForgotPasswordRequest struct {
-	Email string `json:"email" binding:"required,email"`
 }
 
 type ResetPasswordRequest struct {
@@ -117,4 +112,9 @@ type OrganizationDetailsResponse struct {
 	OwnerEmail        *string   `json:"owner_email,omitempty"`
 	CreatedByUserID   string    `json:"created_by_user_id,omitempty"`
 	CreatedByUserName string    `json:"created_by_user_name,omitempty"`
+}
+
+type AccountVerificationRequest struct {
+	AccountID string `json:"account_id" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
 }
