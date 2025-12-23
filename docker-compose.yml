@@ -1,4 +1,3 @@
-
 services:
   users-service:
     build:
@@ -33,7 +32,23 @@ services:
       - DB_PASSWORD=root
       - DB_NAME=ai_knowledgebase
     extra_hosts:
-      - "host.docker.internal:host-gateway"  
+      - "host.docker.internal:host-gateway"
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  frontend-service:
+    build:
+      context: ./rag-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3005:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # If your frontend needs to talk to backend services, you can add URLs here
+      - NEXT_PUBLIC_USERS_SERVICE_URL=http://users-service:8080
+      - NEXT_PUBLIC_CHATS_SERVICE_URL=http://chats-service:50051
     networks:
       - microservices-network
     restart: unless-stopped
