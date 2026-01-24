@@ -29,7 +29,7 @@ import {
 import { nanoid } from "nanoid";
 import { useState } from "react";
 
-const messages: {
+type TMessage = {
   key: string;
   from: "user" | "assistant";
   versions?: { id: string; content: string }[];
@@ -38,10 +38,12 @@ const messages: {
     id: string;
     type: "file";
     url: string;
-    mediaType?: string;
+    mediaType: string;
     filename?: string;
   }[];
-}[] = [
+};
+
+const messages: TMessage[] = [
   {
     key: nanoid(),
     from: "user",
@@ -118,53 +120,59 @@ Would you like to explore more advanced hooks like \`useCallback\` or \`useMemo\
       },
       {
         id: nanoid(),
-        content: `React hooks are special functions that let you use React features in function components. The most common ones are:
+        content: `# React Hooks Guide
 
-- **useState** - for managing component state
-- **useEffect** - for side effects like data fetching
-- **useContext** - for consuming context values
-- **useRef** - for accessing DOM elements
+React hooks are functions that let you "hook into" React state and lifecycle features from function components. Here's what you need to know:
 
-Here's a simple example:
+## Core Hooks
+
+### useState
+Adds state to functional components:
 
 \`\`\`jsx
-function Counter() {
-  const [count, setCount] = useState(0);
+const [count, setCount] = useState(0);
 
-  return (
-    <button onClick={() => setCount(count + 1)}>
-      Clicked {count} times
-    </button>
-  );
-}
+return (
+  <button onClick={() => setCount(count + 1)}>
+    Count: {count}
+  </button>
+);
 \`\`\`
 
-Which specific hook would you like to learn more about?`,
-      },
-      {
-        id: nanoid(),
-        content: `Absolutely! React hooks are a powerful feature introduced in React 16.8. They solve several problems:
+### useEffect
+Handles side effects (data fetching, subscriptions, DOM updates):
 
-## Key Benefits
+\`\`\`jsx
+useEffect(() => {
+  document.title = \`You clicked \${count} times\`;
 
-1. **Simpler code** - No need for class components
-2. **Reusable logic** - Extract stateful logic into custom hooks
-3. **Better organization** - Group related code together
+  // Cleanup function (optional)
+  return () => {
+    document.title = 'React App';
+  };
+}, [count]); // Dependency array
+\`\`\`
 
-## Most Popular Hooks
+## When to Use Hooks
 
-| Hook | Purpose |
-|------|---------|
-| useState | Add state to components |
-| useEffect | Handle side effects |
-| useContext | Access context values |
-| useReducer | Complex state logic |
-| useCallback | Memoize functions |
-| useMemo | Memoize values |
+- ✅ **Function components** - Hooks only work in function components
+- ✅ **Replacing class components** - Modern React favors hooks over classes
+- ✅ **Sharing stateful logic** - Create custom hooks to reuse logic
+- ❌ **Class components** - Use lifecycle methods instead
 
-The beauty of hooks is that they let you reuse stateful logic without changing your component hierarchy. Want to dive into a specific hook?`,
+## Rules of Hooks
+
+1. Only call hooks at the **top level** (not inside loops, conditions, or nested functions)
+2. Only call hooks from **React functions** (components or custom hooks)
+
+Would you like to explore more advanced hooks like \`useCallback\` or \`useMemo\`?`,
       },
     ],
+  },
+  {
+    key: nanoid(),
+    from: "user",
+    content: "hello i am user",
   },
 ];
 
@@ -185,7 +193,7 @@ const Messages = () => {
       {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Demo component with complex rendering logic */}
       {messages.map((message) => (
         <Message from={message.from} key={message.key}>
-          {message.versions?.length && message.versions.length > 1 ? (
+          {message.versions?.length && message.versions.length >= 1 ? (
             <MessageBranch defaultBranch={0} key={message.key}>
               <MessageBranchContent>
                 {message.versions?.map((version) => (
@@ -206,6 +214,7 @@ const Messages = () => {
                       label="Retry"
                       onClick={handleRetry}
                       tooltip="Regenerate response"
+                      className="hidden"
                     >
                       <RefreshCcwIcon className="size-4" />
                     </MessageAction>
@@ -218,6 +227,7 @@ const Messages = () => {
                         }))
                       }
                       tooltip="Like this response"
+                      className="hidden"
                     >
                       <ThumbsUpIcon
                         className="size-4"
@@ -233,6 +243,7 @@ const Messages = () => {
                         }))
                       }
                       tooltip="Dislike this response"
+                      className="hidden"
                     >
                       <ThumbsDownIcon
                         className="size-4"
@@ -273,12 +284,27 @@ const Messages = () => {
                   message.content
                 )}
               </MessageContent>
+
+              {message.content && (
+                <MessageActions
+                  className={message.from === "user" ? "justify-end pt-2" : ""}
+                >
+                  <MessageAction
+                    label="Copy"
+                    onClick={() => handleCopy(message.content || "")}
+                    tooltip="Copy to clipboard"
+                  >
+                    <CopyIcon className="size-4" />
+                  </MessageAction>
+                </MessageActions>
+              )}
               {message.from === "assistant" && message.versions && (
                 <MessageActions>
                   <MessageAction
                     label="Retry"
                     onClick={handleRetry}
                     tooltip="Regenerate response"
+                    className="hidden"
                   >
                     <RefreshCcwIcon className="size-4" />
                   </MessageAction>
@@ -291,6 +317,7 @@ const Messages = () => {
                       }))
                     }
                     tooltip="Like this response"
+                    className="hidden"
                   >
                     <ThumbsUpIcon
                       className="size-4"
@@ -306,6 +333,7 @@ const Messages = () => {
                       }))
                     }
                     tooltip="Dislike this response"
+                    className="hidden"
                   >
                     <ThumbsDownIcon
                       className="size-4"

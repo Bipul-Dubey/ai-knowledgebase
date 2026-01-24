@@ -30,7 +30,7 @@ export function NavUser() {
   const user = {
     name: "RAG",
     email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    avatar: "/images/logos.png",
   };
   const { isMobile } = useSidebar();
 

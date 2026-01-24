@@ -47,7 +47,7 @@ const ChatBox = () => {
               "min-h-15",
             )}
             style={{
-              overflow: "hidden",
+              overflowY: "auto",
             }}
           />
         </div>
