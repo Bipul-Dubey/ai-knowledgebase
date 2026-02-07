@@ -33,7 +33,7 @@ func (h *AuthenticationHandler) SignUp(c *gin.Context) {
 	// Call service layer
 	res, err := h.authService.SignUp(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.APIResponse(true, "Signup failed: "+err.Error(), nil, http.StatusInternalServerError))
+		c.JSON(http.StatusConflict, utils.APIResponse(true, "Signup failed: "+err.Error(), nil, http.StatusConflict))
 		return
 	}
 

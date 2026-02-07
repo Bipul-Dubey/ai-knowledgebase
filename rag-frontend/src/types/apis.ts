@@ -1,0 +1,54 @@
+export interface ApiResponse<T> {
+  error: boolean;
+  message: string;
+  data: T | null;
+  status: number;
+}
+
+export interface SignupPayload {
+  organization_name: string;
+  owner_name: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginPayload {
+  account_id: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginUser {
+  access_token: string;
+  user_id: string;
+  organization_id: string;
+  role: string;
+  name: string;
+  email: string;
+  status: string;
+  organization_name: string;
+}
+
+export interface VerifyAccountPayload {
+  token: string;
+}
+
+export interface VerifyAccountData {
+  user_id: string;
+  email: string;
+  status: string;
+  is_verified: boolean;
+  organization_id: string;
+}
+
+export interface OrganizationDetails {
+  organization_id: string;
+  account_id: number;
+  name: string;
+  status: "active" | "inactive";
+  created_at: string;
+  total_users: number;
+  owner_email: string;
+  created_by_user_id: string;
+  created_by_user_name: string;
+}

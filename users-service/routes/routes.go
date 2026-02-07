@@ -8,8 +8,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRoutes(h *handlers.HandlerManager, db *gorm.DB) *gin.Engine {
-	r := gin.Default()
+func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.Engine {
+	// r := gin.Default()
 
 	api := r.Group("/api/v1")
 	{

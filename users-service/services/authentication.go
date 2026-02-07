@@ -137,15 +137,16 @@ func (s *authenticationService) SignUp(ctx context.Context, req *models.SignupRe
 	// 8️⃣ Send verification email asynchronously
 	go func() {
 		frontendURL := os.Getenv("FRONTEND_BASE_URL")
-		verifyLink := fmt.Sprintf("%s/verify-account?token=%s&account_id=%s", frontendURL, inviteToken, accountID)
+		verifyLink := fmt.Sprintf("%s/pl/verify-account?token=%s&account_id=%s", frontendURL, inviteToken, accountID)
 
 		emailBody := fmt.Sprintf(`
 			<h2>Welcome to %s!</h2>
 			<p>Hi %s,</p>
+			<b>Account ID: %s</b>
 			<p>Please verify your account by clicking the button below:</p>
 			<a href="%s" style="background:#4F46E5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Verify Account</a>
 			<p>This link will expire in 1 hour.</p>
-		`, req.OrganizationName, req.OwnerName, verifyLink)
+		`, req.OrganizationName, req.OwnerName, org.AccountID, verifyLink)
 
 		emailSender := utils.NewEmailSender()
 		if err := emailSender.SendEmail(req.Email, "Verify Your Account", emailBody); err != nil {

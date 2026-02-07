@@ -1,9 +1,20 @@
-import { SignupForm } from "@/components/signup-form";
+import { SignupForm } from "@/components/auth/signup-form";
 import Image from "next/image";
 
 export default function SignupPage() {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
+      {/* Left illustration */}
+      <div className="relative hidden lg:flex items-center justify-center bg-muted">
+        <Image
+          src="/images/register.png"
+          alt="Register"
+          fill
+          priority
+          className="absolute inset-0 h-full w-full object-left dark:brightness-[0.2] dark:grayscale"
+        />
+      </div>
+
       {/* Right auth section */}
       <div className="flex flex-col p-6 md:p-10">
         <div className="flex flex-1 flex-col items-center justify-center gap-6">
@@ -23,17 +34,6 @@ export default function SignupPage() {
             <SignupForm />
           </div>
         </div>
-      </div>
-
-      {/* Left illustration */}
-      <div className="relative hidden lg:flex items-center justify-center bg-muted">
-        <Image
-          src="/images/register.png"
-          alt="Register"
-          fill
-          priority
-          className="absolute inset-0 h-full w-full object-left dark:brightness-[0.2] dark:grayscale"
-        />
       </div>
     </div>
   );
