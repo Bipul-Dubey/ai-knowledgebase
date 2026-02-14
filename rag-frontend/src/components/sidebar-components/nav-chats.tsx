@@ -25,13 +25,11 @@ import { cn } from "@/lib/utils";
 
 export function NavChats() {
   const { isMobile } = useSidebar();
-  const params = useParams();
-  const orgId = params.orgId as string;
+  const params: { orgId: string; chatId?: string } = useParams();
   const router = useRouter();
-
   const { data, isLoading, isFetching, isError, refetch } = useChatsList();
   const { mutate: deleteChat, isPending } = useDeleteConversation();
-  const { clear, setChatId, cancelStream, chatId } = useChatStore();
+  const { clear, setChatId, cancelStream } = useChatStore();
 
   const chats = data?.data ?? [];
 
@@ -39,7 +37,7 @@ export function NavChats() {
     cancelStream(); // stop ongoing streaming
     clear(); // clear previous messages
     setChatId(chatId); // set new chat id
-    router.replace(PATHS.pl.CHAT(orgId, chatId));
+    router.replace(PATHS.pl.CHAT(params.orgId, chatId));
   };
 
   return (
@@ -89,7 +87,8 @@ export function NavChats() {
                 className={cn(
                   "cursor-pointer rounded-md transition-colors",
                   "hover:bg-gray-200/75",
-                  chatId === item.id &&
+                  params?.chatId &&
+                    params.chatId === item.id &&
                     "bg-gray-200 text-accent-foreground font-medium",
                 )}
               >
@@ -97,7 +96,7 @@ export function NavChats() {
               </SidebarMenuButton>
 
               <DropdownMenu>
-                <DropdownMenuTrigger asChild className="bg-amber-50">
+                <DropdownMenuTrigger asChild className="bg-amber-50 border-2">
                   <SidebarMenuAction showOnHover>
                     <MoreHorizontal />
                     <span className="sr-only">More</span>

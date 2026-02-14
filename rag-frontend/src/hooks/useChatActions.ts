@@ -21,6 +21,7 @@ export const useChatActions = () => {
     replaceChatId,
     setStreaming,
     setAbortController,
+    setWaitingResponse,
   } = useChatStore();
 
   const { refetch } = useChatsList();
@@ -61,6 +62,7 @@ export const useChatActions = () => {
     const controller = new AbortController();
     setAbortController(controller);
     setStreaming(true);
+    setWaitingResponse(true);
 
     try {
       const response = await fetch(`${ENV.BASE_API_URL_CHATS}/chats/query`, {
@@ -84,6 +86,7 @@ export const useChatActions = () => {
       const decoder = new TextDecoder();
 
       let buffer = "";
+      let firstChunkReceived = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -110,12 +113,18 @@ export const useChatActions = () => {
               // 🔥 chat_id
               if (parsed.event === "chat_id" && isNewChat) {
                 replaceChatId(parsed.chatId);
-                router.replace(PATHS.pl.CHAT(params?.orgId, chatId));
+                router.replace(PATHS.pl.CHAT(params?.orgId, parsed.chatId));
                 refetch();
               }
 
               // 🌊 streaming chunks
               if (parsed.event === "response") {
+                // FIRST STREAM CHUNK RECEIVED
+                if (!firstChunkReceived) {
+                  firstChunkReceived = true;
+                  setWaitingResponse(false);
+                }
+
                 appendVersionChunk(
                   assistantKey,
                   versionId,
@@ -124,9 +133,9 @@ export const useChatActions = () => {
               }
 
               // 🎯 final event
-              if (parsed.event === "final") {
-                console.log("Final:", parsed.answer);
-              }
+              // if (parsed.event === "final") {
+              //   console.log("Final:", parsed.answer);
+              // }
             } catch (err) {
               console.error("SSE parse error:", err);
             }
@@ -146,6 +155,7 @@ export const useChatActions = () => {
       }
     } finally {
       setStreaming(false);
+      setWaitingResponse(false);
       setAbortController(null);
     }
   };

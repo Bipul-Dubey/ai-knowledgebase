@@ -16,31 +16,34 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import Link from "next/link";
+import { PATHS } from "@/constants/paths";
+import { useParams } from "next/navigation";
 
 const MENU_ITEMS = [
   {
     title: "Dashboard",
-    url: "analytics",
+    url: PATHS.pl.ANALYTICS,
     icon: ChartArea,
   },
   {
     title: "Documents",
-    url: "documents",
+    url: PATHS.pl.DOCUMENTS,
     icon: BookOpen,
   },
   {
     title: "Users",
-    url: "users",
+    url: PATHS.pl.USERS,
     icon: Users2Icon,
   },
   {
     title: "Settings",
-    url: "settings",
+    url: PATHS.pl.SETTINGS,
     icon: Settings2,
   },
 ];
 
 export function NavMain() {
+  const params: { orgId: string } = useParams();
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
@@ -50,7 +53,7 @@ export function NavMain() {
           <SidebarMenuItem key={item.title}>
             <SidebarMenuButton asChild tooltip={item.title}>
               <Link
-                href={item.url}
+                href={item.url.replace(":orgId", params.orgId)}
                 className="flex items-center justify-between w-full"
               >
                 <div className="flex items-center gap-2">

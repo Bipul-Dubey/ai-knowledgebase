@@ -69,3 +69,14 @@ export interface IBackendMessage {
 export interface IChatMessagesPayload {
   messages: IBackendMessage[];
 }
+
+export interface IDocumentResource {
+  id: string;
+  file_name: string;
+  type: string;
+  url: string;
+  status: "untrained" | "training" | "active" | "trained";
+  created_at: string;
+  last_trained_at: string;
+  file_size: number;
+}

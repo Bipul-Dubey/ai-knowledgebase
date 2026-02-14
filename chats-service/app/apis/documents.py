@@ -59,11 +59,11 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 """
                 INSERT INTO documents
                     (created_by, organization_id, file_name, s3_key,
-                     status, trainable, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, 'active', TRUE, NOW(), NOW())
-                RETURNING id, file_name, created_at
+                    file_size, status, trainable, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, 'active', TRUE, NOW(), NOW())
+                RETURNING id, file_name, file_size, created_at
                 """,
-                (user_id, org_id, file.filename, s3_key),
+                (user_id, org_id, file.filename, s3_key, file_size),
             )
             document = await cur.fetchone()
 
@@ -197,7 +197,7 @@ async def list_documents(
 
     async with get_db_cursor() as cur:
         query = """
-            SELECT id, file_name, status, created_at
+            SELECT id, file_name, status, created_at, file_size
             FROM documents
             WHERE organization_id = %s
         """

@@ -3,6 +3,7 @@
 import ChatBox from "@/components/ai-components/ChatBox";
 import Messages from "@/components/ai-components/Messages";
 import { useChatMessages } from "@/hooks/chats";
+import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useChatActions } from "@/hooks/useChatActions";
 import { mapBackendMessagesToStore } from "@/lib/utils";
 import { useChatStore } from "@/providers/ChatStore";
@@ -16,28 +17,25 @@ export default function ChatConversationPage() {
   const {
     messages,
     setMessages,
-    chatId: chatIdReal,
-    setChatId,
+    isWaitingResponse,
+    cancelStream,
+    isStreaming,
   } = useChatStore();
-
   const { sendMessage } = useChatActions();
   const { data } = useChatMessages(chatId);
 
   const hasTriggered = useRef(false);
+  const { containerRef, scrollToBottom } = useAutoScroll(messages);
 
-  /**
-   * Sync route → store
-   */
+  // Hydrate old chat
   useEffect(() => {
-    if (!chatId) return;
+    if (!data || chatId === "new") return;
 
-    if (chatIdReal !== chatId) {
-      hasTriggered.current = false;
-      setChatId(chatId);
-      setMessages([]);
-    }
-  }, [chatId, chatIdReal, setChatId, setMessages]);
+    const mapped = mapBackendMessagesToStore(data);
+    setMessages(mapped);
+  }, [data, chatId, setMessages]);
 
+  // Auto trigger new chat
   useEffect(() => {
     if (
       chatId === "new" &&
@@ -50,30 +48,31 @@ export default function ChatConversationPage() {
     }
   }, [chatId, messages, sendMessage]);
 
-  useEffect(() => {
-    if (!data || chatId === "new") return;
-
-    const mapped = mapBackendMessagesToStore(data);
-    setMessages(mapped);
-  }, [data, chatId, setMessages]);
-
   const handleSubmitMessage = (message: string) => {
     if (!message.trim()) return;
-
+    scrollToBottom();
     sendMessage(message);
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex-1 overflow-y-auto">
+      <div ref={containerRef} className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl p-2">
-          <Messages messages={messages} key={chatId} />
+          <Messages
+            messages={messages}
+            key={chatId}
+            isWaitingResponse={isWaitingResponse}
+          />
         </div>
       </div>
 
       {/* Input */}
       <div className="mx-auto w-full max-w-4xl p-4">
-        <ChatBox onSend={handleSubmitMessage} />{" "}
+        <ChatBox
+          onSend={handleSubmitMessage}
+          onCancel={cancelStream}
+          isLoading={isWaitingResponse || isStreaming}
+        />{" "}
       </div>
     </div>
   );

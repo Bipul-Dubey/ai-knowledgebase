@@ -18,63 +18,23 @@ import {
   Grid,
   Search,
 } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState } from "react";
+import { IDocumentResource } from "@/types/apis";
+import { formatFileSize } from "@/lib/utils";
 
-interface Document {
-  id: string;
-  name: string;
-  size: string;
-  status: "untrained" | "training" | "active" | "trained";
-  lastTrained?: string;
-}
-
-const initialDocuments: Document[] = [
-  {
-    id: "1",
-    name: "Q3 Financial Report.pdf",
-    size: "2.3 MB",
-    status: "active",
-    lastTrained: "Jan 24",
-  },
-  {
-    id: "2",
-    name: "Product Roadmap 2026.pptx",
-    size: "1.8 MB",
-    status: "untrained",
-  },
-  {
-    id: "3",
-    name: "Engineering OKRs.docx",
-    size: "450 KB",
-    status: "training",
-  },
-  {
-    id: "4",
-    name: "Customer Feedback.xlsx",
-    size: "3.1 MB",
-    status: "active",
-    lastTrained: "Jan 22",
-  },
-  {
-    id: "5",
-    name: "Meeting Notes Jan.md",
-    size: "120 KB",
-    status: "untrained",
-  },
-];
-
-export default function DocumentList() {
-  const [documents, setDocuments] = useState(initialDocuments);
+export default function DocumentList({
+  documents,
+}: {
+  documents: IDocumentResource[];
+}) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredDocuments = documents.filter(
-    (doc) =>
-      doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.size.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredDocuments = documents.filter((doc) =>
+    doc.file_name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const getStatusBadge = (status: Document["status"]) => {
+  const getStatusBadge = (status: IDocumentResource["status"]) => {
     switch (status) {
       case "active":
         return (
@@ -98,33 +58,11 @@ export default function DocumentList() {
     }
   };
 
-  // Extracted toggleTrain logic
-  const toggleTrain = useCallback((id: string) => {
-    setDocuments((docs) => {
-      return docs.map((doc) => {
-        if (doc.id !== id) return doc;
+  const shouldShowTrainButton = (status: IDocumentResource["status"]) => {
+    return status === "untrained" || status === "active";
+  };
 
-        // Untrain if currently active
-        if (doc.status === "active") {
-          return { ...doc, status: "untrained" };
-        }
-
-        // Ignore while training
-        if (doc.status === "training") {
-          return doc;
-        }
-
-        // Start training for untrained / trained
-        return { ...doc, status: "training" };
-      });
-    });
-  }, []);
-
-  const deleteDoc = useCallback((id: string) => {
-    setDocuments((docs) => docs.filter((doc) => doc.id !== id));
-  }, []);
-
-  const buttonContent = (status: Document["status"]) => {
+  const buttonContent = (status: IDocumentResource["status"]) => {
     if (status === "active") {
       return (
         <>
@@ -139,10 +77,6 @@ export default function DocumentList() {
         Train
       </>
     );
-  };
-
-  const shouldShowTrainButton = (status: Document["status"]) => {
-    return status === "untrained" || status === "active";
   };
 
   return (
@@ -199,15 +133,20 @@ export default function DocumentList() {
             <div className="space-y-3">
               {/* Top row: icon + name + menu */}
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                <div
+                  className="flex items-center space-x-3 flex-1 min-w-0"
+                  title={doc.file_name}
+                >
                   <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center shrink-0">
                     <FileText className="w-5 h-5 text-orange-500" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-base leading-6 truncate">
-                      {doc.name}
+                      {doc.file_name}
                     </p>
-                    <p className="text-sm text-muted-foreground">{doc.size}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatFileSize(doc.file_size)}
+                    </p>
                   </div>
                 </div>
 
@@ -222,7 +161,7 @@ export default function DocumentList() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
-                      onClick={() => deleteDoc(doc.id)}
+                      // onClick={() => deleteDoc(doc.id)}
                       className="text-destructive"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
@@ -236,9 +175,9 @@ export default function DocumentList() {
               <div className="flex items-center justify-between pt-1">
                 <div className="flex items-center gap-2">
                   {getStatusBadge(doc.status)}
-                  {doc.status === "active" && doc.lastTrained && (
+                  {doc.status === "active" && doc.last_trained_at && (
                     <span className="text-sm text-muted-foreground">
-                      Trained {doc.lastTrained}
+                      Trained {doc.last_trained_at}
                     </span>
                   )}
                 </div>
@@ -247,7 +186,7 @@ export default function DocumentList() {
                   <Button
                     size="sm"
                     variant={doc.status === "active" ? "outline" : "default"}
-                    onClick={() => toggleTrain(doc.id)}
+                    // onClick={() => toggleTrain(doc.id)}
                     className="h-10 px-4 text-sm font-medium"
                   >
                     {buttonContent(doc.status)}

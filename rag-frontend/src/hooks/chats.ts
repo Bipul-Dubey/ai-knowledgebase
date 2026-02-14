@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useChatsList = () => {
   return useQuery({
-    queryKey: ["orgs-user", "conversations"],
+    queryKey: ["conversations"],
     queryFn: fetchConversations,
     placeholderData: (previousData) => previousData,
   });
@@ -21,7 +21,7 @@ export const useDeleteConversation = () => {
 
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["orgs-user", "conversations"],
+        queryKey: ["conversations"],
       });
     },
   });
@@ -29,7 +29,7 @@ export const useDeleteConversation = () => {
 
 export const useChatMessages = (chatId: string | null) => {
   return useQuery({
-    queryKey: ["orgs-user", "chat-messages", chatId],
+    queryKey: ["chat-messages", chatId],
     queryFn: () => fetchChatMessages(chatId!),
     enabled: !!chatId && chatId !== "new",
     staleTime: 1000 * 60 * 2,

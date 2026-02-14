@@ -28,15 +28,6 @@ const AnalyticsPage = () => {
                 </p>
               </div>
             </div>
-
-            {/* Quick Stats */}
-            <div className="flex items-center space-x-4 text-sm bg-muted/50 px-6 py-3 rounded-xl flex-1 xl:flex-none">
-              <span>47 chats</span>
-              <span>•</span>
-              <span>1.2k messages</span>
-              <span>•</span>
-              <span>23 active users</span>
-            </div>
           </div>
         </div>
       </div>
