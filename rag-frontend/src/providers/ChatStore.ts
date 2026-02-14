@@ -2,14 +2,12 @@ import { TMessage } from "@/types";
 import { create } from "zustand";
 
 type ChatStore = {
-  chatId: string | null;
   messages: TMessage[];
   isStreaming: boolean;
   isWaitingResponse: boolean;
 
   abortController: AbortController | null;
 
-  setChatId: (id: string | null) => void;
   addMessage: (message: TMessage) => void;
   setMessages: (messages: TMessage[]) => void;
   appendVersionChunk: (
@@ -23,7 +21,6 @@ type ChatStore = {
   setAbortController: (controller: AbortController | null) => void;
   cancelStream: () => void;
 
-  replaceChatId: (realId: string) => void;
   clear: () => void;
 };
 
@@ -33,8 +30,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isStreaming: false,
   abortController: null,
   isWaitingResponse: false,
-
-  setChatId: (id) => set({ chatId: id }),
 
   addMessage: (message) =>
     set((state) => ({
@@ -72,11 +67,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ isStreaming: false, abortController: null });
   },
 
-  replaceChatId: (realId) => set({ chatId: realId }),
-
   clear: () =>
     set({
-      chatId: null,
       messages: [],
       isStreaming: false,
       abortController: null,

@@ -24,6 +24,8 @@ services:
     build:
       context: .
       dockerfile: chats-service/Dockerfile
+    depends_on:
+      - rabbitmq
     ports:
       - "50051:50051"
     environment:
@@ -33,11 +35,20 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=root
       - DB_NAME=ai_knowledgebase
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - microservices-network
     restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - microservices-network
 
   # frontend-service:
   #   build:

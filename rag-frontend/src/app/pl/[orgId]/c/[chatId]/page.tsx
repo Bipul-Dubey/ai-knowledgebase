@@ -24,34 +24,30 @@ export default function ChatConversationPage() {
   const { sendMessage } = useChatActions();
   const { data } = useChatMessages(chatId);
 
-  const hasTriggered = useRef(false);
+  const hydratedChatRef = useRef<string | null>(null);
+
   const { containerRef, scrollToBottom } = useAutoScroll(messages);
 
-  // Hydrate old chat
   useEffect(() => {
     if (!data || chatId === "new") return;
 
-    const mapped = mapBackendMessagesToStore(data);
-    setMessages(mapped);
-  }, [data, chatId, setMessages]);
+    const justCreated = sessionStorage.getItem("justCreatedChat");
 
-  // Auto trigger new chat
-  useEffect(() => {
-    if (
-      chatId === "new" &&
-      messages.length === 1 &&
-      messages[0].from === "user" &&
-      !hasTriggered.current
-    ) {
-      hasTriggered.current = true;
-      sendMessage(messages[0].content!, { skipUserAdd: true });
+    if (justCreated === chatId) {
+      sessionStorage.removeItem("justCreatedChat");
+      return;
     }
-  }, [chatId, messages, sendMessage]);
+
+    if (hydratedChatRef.current === chatId) return;
+
+    setMessages(mapBackendMessagesToStore(data));
+    hydratedChatRef.current = chatId;
+  }, [data, chatId, setMessages]);
 
   const handleSubmitMessage = (message: string) => {
     if (!message.trim()) return;
     scrollToBottom();
-    sendMessage(message);
+    sendMessage(message, { isNewChat: false });
   };
 
   return (

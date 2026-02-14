@@ -8,17 +8,16 @@ import { useChatsList } from "./chats";
 
 type SendOptions = {
   skipUserAdd?: boolean;
+  isNewChat: boolean;
 };
 
 export const useChatActions = () => {
   const router = useRouter();
-  const params = useParams<{ orgId: string }>();
-
+  const params = useParams<{ orgId: string; chatId: string }>();
+  const { chatId, orgId } = params;
   const {
-    chatId,
     addMessage,
     appendVersionChunk,
-    replaceChatId,
     setStreaming,
     setAbortController,
     setWaitingResponse,
@@ -28,6 +27,8 @@ export const useChatActions = () => {
 
   const sendMessage = async (input: string, options?: SendOptions) => {
     if (!input.trim()) return;
+
+    console.log("options?.isNewChat:", options?.isNewChat);
 
     const token =
       typeof window !== "undefined"
@@ -57,8 +58,6 @@ export const useChatActions = () => {
       versions: [{ id: versionId, content: "" }],
     });
 
-    const isNewChat = chatId === "new";
-
     const controller = new AbortController();
     setAbortController(controller);
     setStreaming(true);
@@ -73,7 +72,7 @@ export const useChatActions = () => {
         },
         body: JSON.stringify({
           message: input,
-          chatId: isNewChat ? undefined : chatId,
+          chatId: options?.isNewChat ? undefined : chatId,
         }),
         signal: controller.signal,
       });
@@ -111,9 +110,10 @@ export const useChatActions = () => {
               const parsed = JSON.parse(jsonString);
 
               // 🔥 chat_id
-              if (parsed.event === "chat_id" && isNewChat) {
-                replaceChatId(parsed.chatId);
-                router.replace(PATHS.pl.CHAT(params?.orgId, parsed.chatId));
+              if (parsed.event === "chat_id" && options?.isNewChat) {
+                sessionStorage.setItem("justCreatedChat", parsed.chatId);
+
+                router.replace(PATHS.pl.CHAT(orgId, parsed.chatId));
                 refetch();
               }
 

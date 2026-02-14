@@ -29,14 +29,13 @@ export function NavChats() {
   const router = useRouter();
   const { data, isLoading, isFetching, isError, refetch } = useChatsList();
   const { mutate: deleteChat, isPending } = useDeleteConversation();
-  const { clear, setChatId, cancelStream } = useChatStore();
+  const { clear, cancelStream } = useChatStore();
 
   const chats = data?.data ?? [];
 
   const handleSelectChat = (chatId: string) => {
     cancelStream(); // stop ongoing streaming
     clear(); // clear previous messages
-    setChatId(chatId); // set new chat id
     router.replace(PATHS.pl.CHAT(params.orgId, chatId));
   };
 
@@ -98,8 +97,8 @@ export function NavChats() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild className="bg-amber-50 border-2">
                   <SidebarMenuAction showOnHover>
-                    <MoreHorizontal />
-                    <span className="sr-only">More</span>
+                    <MoreHorizontal className="h-8 w-8" />
+                    <span className="sr-only">More Option</span>
                   </SidebarMenuAction>
                 </DropdownMenuTrigger>
 
@@ -112,6 +111,9 @@ export function NavChats() {
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteChat(item.id);
+                      if (params.chatId === item.id) {
+                        router.replace(PATHS.pl.NEW_CHAT(params.orgId));
+                      }
                     }}
                     disabled={isPending}
                   >

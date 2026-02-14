@@ -6,28 +6,22 @@ import { ActionButton } from "@/components/ai-components/chats-common";
 import { useChatStore } from "@/providers/ChatStore";
 import { AlignLeft, GitCompare, HelpCircle, Search } from "lucide-react";
 import { PATHS } from "@/constants/paths";
+import { useChatActions } from "@/hooks/useChatActions";
 
 export default function ChatEmptyPage() {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
 
-  const { clear, setChatId, addMessage } = useChatStore();
+  const { clear } = useChatStore();
+  const { sendMessage } = useChatActions();
 
   const handleSubmitMessage = (message: string) => {
     if (!message.trim()) return;
 
     clear();
 
-    const tempId = "new";
-    setChatId(tempId);
-
-    addMessage({
-      key: crypto.randomUUID(),
-      from: "user",
-      content: message,
-    });
-
-    router.push(PATHS.pl.CHAT(params.orgId, tempId));
+    sendMessage(message, { isNewChat: true });
+    router.push(PATHS.pl.CHAT(params.orgId, "new"));
   };
 
   return (
