@@ -10,6 +10,7 @@ type ChatStore = {
 
   setChatId: (id: string | null) => void;
   addMessage: (message: TMessage) => void;
+  setMessages: (messages: TMessage[]) => void;
   appendVersionChunk: (
     messageKey: string,
     versionId: string,
@@ -35,6 +36,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message],
+    })),
+
+  setMessages: (messages) =>
+    set(() => ({
+      messages: messages,
     })),
 
   appendVersionChunk: (messageKey, versionId, chunk) =>

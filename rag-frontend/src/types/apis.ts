@@ -58,3 +58,14 @@ export interface IConversation {
   title: string;
   last_message_at: string;
 }
+
+export interface IBackendMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface IChatMessagesPayload {
+  messages: IBackendMessage[];
+}

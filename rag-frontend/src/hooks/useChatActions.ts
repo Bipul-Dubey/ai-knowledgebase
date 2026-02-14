@@ -4,6 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useChatStore } from "@/providers/ChatStore";
 import { ENV } from "@/constants/environments";
 import { PATHS } from "@/constants/paths";
+import { useChatsList } from "./chats";
 
 type SendOptions = {
   skipUserAdd?: boolean;
@@ -21,6 +22,8 @@ export const useChatActions = () => {
     setStreaming,
     setAbortController,
   } = useChatStore();
+
+  const { refetch } = useChatsList();
 
   const sendMessage = async (input: string, options?: SendOptions) => {
     if (!input.trim()) return;
@@ -108,6 +111,7 @@ export const useChatActions = () => {
               if (parsed.event === "chat_id" && isNewChat) {
                 replaceChatId(parsed.chatId);
                 router.replace(PATHS.pl.CHAT(params?.orgId, chatId));
+                refetch();
               }
 
               // 🌊 streaming chunks

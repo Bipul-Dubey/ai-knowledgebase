@@ -1,12 +1,11 @@
 "use client";
 
-import { Folder, MoreHorizontal, Share, Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -18,9 +17,11 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useChatsList } from "@/hooks/chats";
+import { useChatsList, useDeleteConversation } from "@/hooks/chats";
 import { useParams, useRouter } from "next/navigation";
 import { PATHS } from "@/constants/paths";
+import { useChatStore } from "@/providers/ChatStore";
+import { cn } from "@/lib/utils";
 
 export function NavChats() {
   const { isMobile } = useSidebar();
@@ -29,8 +30,17 @@ export function NavChats() {
   const router = useRouter();
 
   const { data, isLoading, isFetching, isError, refetch } = useChatsList();
+  const { mutate: deleteChat, isPending } = useDeleteConversation();
+  const { clear, setChatId, cancelStream, chatId } = useChatStore();
 
   const chats = data?.data ?? [];
+
+  const handleSelectChat = (chatId: string) => {
+    cancelStream(); // stop ongoing streaming
+    clear(); // clear previous messages
+    setChatId(chatId); // set new chat id
+    router.replace(PATHS.pl.CHAT(orgId, chatId));
+  };
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -75,8 +85,13 @@ export function NavChats() {
             <SidebarMenuItem key={item.id}>
               <SidebarMenuButton
                 asChild
-                onClick={() => router.replace(PATHS.pl.CHAT(orgId, item.id))}
-                className="hover:cursor-pointer"
+                onClick={() => handleSelectChat(item.id)}
+                className={cn(
+                  "cursor-pointer rounded-md transition-colors",
+                  "hover:bg-gray-200/75",
+                  chatId === item.id &&
+                    "bg-gray-200 text-accent-foreground font-medium",
+                )}
               >
                 <span className="truncate">{item.title}</span>
               </SidebarMenuButton>
@@ -94,19 +109,13 @@ export function NavChats() {
                   side={isMobile ? "bottom" : "right"}
                   align={isMobile ? "end" : "start"}
                 >
-                  <DropdownMenuItem>
-                    <Folder className="text-muted-foreground" />
-                    <span>View Project</span>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem>
-                    <Share className="text-muted-foreground" />
-                    <span>Share Project</span>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuSeparator />
-
-                  <DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteChat(item.id);
+                    }}
+                    disabled={isPending}
+                  >
                     <Trash2 className="text-muted-foreground" />
                     <span>Delete Project</span>
                   </DropdownMenuItem>
