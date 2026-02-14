@@ -1,4 +1,8 @@
-import { ApiResponse, OrganizationDetails } from "@/types/apis";
+import {
+  ApiResponse,
+  DashboardStatsResponse,
+  OrganizationDetails,
+} from "@/types/apis";
 import axiosInstance from "./middleware";
 
 export const getOrganizationDetails = async () => {
@@ -8,3 +12,9 @@ export const getOrganizationDetails = async () => {
 
   return res.data;
 };
+
+export async function fetchDashboardStats(): Promise<DashboardStatsResponse> {
+  const response = await axiosInstance.get(`/organization/dashboard-stats`);
+
+  return response.data.data;
+}

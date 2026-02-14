@@ -1,46 +1,27 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { FileText, Info, Settings } from "lucide-react";
 import DocumentList from "@/components/documents/DocumentList";
-import { useDocumentResources } from "@/hooks/useDocumentResources";
 import { UploadDocumentModal } from "@/components/documents/UploadDocument";
+import { useTrainDocuments } from "@/hooks/useDocumentResources";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 const DocumentsPage = () => {
-  const { data, isLoading, isError, refetch } = useDocumentResources();
+  const { mutate: trainDocs, isPending: isTrainPending } = useTrainDocuments();
+  const [showInfo, setShowInfo] = useState(false);
 
-  if (isLoading) {
-    return (
-      <div className="p-6 space-y-3">
-        <div className="h-6 w-1/3 animate-pulse rounded bg-muted" />
-        <div className="h-6 w-full animate-pulse rounded bg-muted" />
-        <div className="h-6 w-full animate-pulse rounded bg-muted" />
-        <div className="h-6 w-2/3 animate-pulse rounded bg-muted" />
-      </div>
-    );
-  }
+  const onTrainClick = () => {
+    handleTrain();
+    setShowInfo(true);
 
-  if (isError) {
-    return (
-      <div className="p-6 text-center space-y-3">
-        <p className="text-sm text-red-500">Failed to load documents.</p>
+    // Optional auto hide after 6 seconds
+    setTimeout(() => setShowInfo(false), 6000);
+  };
 
-        <button
-          onClick={() => refetch()}
-          className="text-sm underline text-muted-foreground hover:text-foreground"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (!data || data.length === 0) {
-    return (
-      <div className="p-6 text-center text-sm text-muted-foreground">
-        No documents uploaded yet.
-      </div>
-    );
-  }
+  const handleTrain = () => {
+    trainDocs([]);
+  };
 
   return (
     <div className="flex flex-col bg-background">
@@ -63,15 +44,44 @@ const DocumentsPage = () => {
               {/* Action Buttons */}
               <div className="flex gap-2">
                 <UploadDocumentModal />
+                <Button
+                  onClick={onTrainClick}
+                  disabled={isTrainPending}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  <Settings
+                    className={`h-4 w-4 ${
+                      isTrainPending ? "animate-spin" : ""
+                    }`}
+                  />
+                  {isTrainPending ? "Training..." : "Train Documents"}
+                </Button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {showInfo && (
+        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-blue-800 shadow-sm mt-4">
+          <div className="mt-0.5">
+            <Info className="h-5 w-5 text-blue-600" />
+          </div>
+
+          <div className="flex-1">
+            <p className="text-sm font-medium">
+              Training has started for all selected documents.
+            </p>
+            <p className="text-sm text-blue-700/80">
+              This may take a few minutes. You can continue using the app.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main content area - Full Width */}
       <main className="flex-1 w-full px-6 py-12">
-        <DocumentList documents={data ?? []} />
+        <DocumentList />
       </main>
     </div>
   );

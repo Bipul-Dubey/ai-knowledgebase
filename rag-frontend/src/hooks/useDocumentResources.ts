@@ -1,4 +1,9 @@
-import { fetchDocumentResources, uploadDocument } from "@/apis/documents";
+import {
+  deleteDocument,
+  fetchDocumentResources,
+  trainDocuments,
+  uploadDocument,
+} from "@/apis/documents";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useDocumentResources = () => {
@@ -18,6 +23,43 @@ export const useUploadDocument = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["documents", "resources"],
+      });
+    },
+  });
+};
+
+export const useDeleteDocument = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (documentId: string) => deleteDocument(documentId),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["documents", "resources"],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-stats"],
+      });
+    },
+  });
+};
+
+export const useTrainDocuments = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (documentIds: string[]) =>
+      trainDocuments({ document_ids: documentIds }),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["documents", "resources"],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-stats"],
       });
     },
   });

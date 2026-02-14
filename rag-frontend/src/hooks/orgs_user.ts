@@ -1,4 +1,4 @@
-import { getOrganizationDetails } from "@/apis/orgs_user";
+import { fetchDashboardStats, getOrganizationDetails } from "@/apis/orgs_user";
 import { useQuery } from "@tanstack/react-query";
 
 export const useOrganizationDetails = () => {
@@ -11,5 +11,13 @@ export const useOrganizationDetails = () => {
     },
     staleTime: 5 * 60 * 1000,
     enabled: false,
+  });
+};
+
+export const useDashboardStats = () => {
+  return useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: fetchDashboardStats,
+    staleTime: 5 * 60 * 1000,
   });
 };

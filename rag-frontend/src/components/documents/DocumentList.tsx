@@ -21,14 +21,63 @@ import {
 import { useState } from "react";
 import { IDocumentResource } from "@/types/apis";
 import { formatFileSize } from "@/lib/utils";
+import {
+  useDeleteDocument,
+  useDocumentResources,
+} from "@/hooks/useDocumentResources";
 
-export default function DocumentList({
-  documents,
-}: {
-  documents: IDocumentResource[];
-}) {
+export default function DocumentList() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
+
+  const {
+    data: documents = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useDocumentResources();
+
+  const { mutate: deleteDoc, isPending } = useDeleteDocument();
+
+  const handleDelete = (id: string) => {
+    console.log("id:", id);
+
+    deleteDoc(id);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-3">
+        <div className="h-6 w-1/3 animate-pulse rounded bg-muted" />
+        <div className="h-6 w-full animate-pulse rounded bg-muted" />
+        <div className="h-6 w-full animate-pulse rounded bg-muted" />
+        <div className="h-6 w-2/3 animate-pulse rounded bg-muted" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6 text-center space-y-3">
+        <p className="text-sm text-red-500">Failed to load documents.</p>
+
+        <button
+          onClick={() => refetch()}
+          className="text-sm underline text-muted-foreground hover:text-foreground"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!documents || documents.length === 0) {
+    return (
+      <div className="p-6 text-center text-sm text-muted-foreground">
+        No documents uploaded yet.
+      </div>
+    );
+  }
 
   const filteredDocuments = documents.filter((doc) =>
     doc.file_name.toLowerCase().includes(searchTerm.toLowerCase()),
@@ -161,8 +210,9 @@ export default function DocumentList({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
-                      // onClick={() => deleteDoc(doc.id)}
+                      onClick={() => handleDelete(doc.id)}
                       className="text-destructive"
+                      disabled={isPending}
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
                       Delete document

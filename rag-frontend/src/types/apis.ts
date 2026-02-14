@@ -80,3 +80,23 @@ export interface IDocumentResource {
   last_trained_at: string;
   file_size: number;
 }
+
+export interface DailyActivity {
+  date: string;
+  total_chats: number;
+  total_messages: number;
+}
+
+export interface DashboardStatsResponse {
+  total_users: number;
+  total_documents: number;
+  total_chats: number;
+  total_queries: number;
+  total_messages: number;
+  total_cost: number;
+  last_30_days: DailyActivity[];
+}
+
+export interface TrainDocumentsPayload {
+  document_ids: string[];
+}

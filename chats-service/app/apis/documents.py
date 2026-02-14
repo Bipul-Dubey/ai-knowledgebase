@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Literal
 from datetime import datetime, timezone
 from hashlib import sha256
-import json
+from app.helpers.s3_storage import delete_s3_object, S3DeletionError
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -258,6 +258,83 @@ async def set_trainable_bulk(request: Request, body: TrainableUpdateBulkRequest)
         return APIResponse(
             True,
             "Failed to update trainable flags",
+            {"error": str(e)},
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+# =======================
+# 🗑️ Delete Document (Hard Delete)
+# =======================
+@router.delete("/delete/{document_id}")
+async def delete_document(document_id: str, request: Request):
+    claims = getattr(request.state, "claims", None)
+    if not claims:
+        return APIResponse(
+            True,
+            "Unauthorized",
+            None,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    org_id = claims.get("organization_id")
+
+    try:
+        async with get_db_cursor() as cur:
+
+            # 1️⃣ Get document & verify ownership
+            await cur.execute(
+                """
+                SELECT s3_key
+                FROM documents
+                WHERE id=%s AND organization_id=%s
+                """,
+                (document_id, org_id),
+            )
+            doc = await cur.fetchone()
+
+            if not doc:
+                return APIResponse(
+                    True,
+                    "Document not found",
+                    None,
+                    status.HTTP_404_NOT_FOUND,
+                )
+
+            s3_key = doc["s3_key"]
+
+            # 2️⃣ Delete from S3 first
+            try:
+                await delete_s3_object(s3_key)   # ✅ MUST await
+            except S3DeletionError as s3_error:   # ✅ catch specific error
+                print(f"[S3 DELETE ERROR] {s3_error}")
+                return APIResponse(
+                    True,
+                    "Failed to delete file from S3",
+                    {"error": str(s3_error)},
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            # 3️⃣ Delete from DB
+            await cur.execute(
+                """
+                DELETE FROM documents
+                WHERE id=%s AND organization_id=%s
+                """,
+                (document_id, org_id),
+            )
+
+        return APIResponse(
+            False,
+            "Document deleted successfully",
+            None,
+        )
+
+    except Exception as e:
+        print(f"[DELETE ERROR] {e}")
+        return APIResponse(
+            True,
+            "Failed to delete document",
             {"error": str(e)},
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

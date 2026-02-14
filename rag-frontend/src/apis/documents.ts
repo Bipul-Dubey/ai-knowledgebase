@@ -1,5 +1,9 @@
 import { ENV } from "@/constants/environments";
-import { ApiResponse, IDocumentResource } from "@/types/apis";
+import {
+  ApiResponse,
+  IDocumentResource,
+  TrainDocumentsPayload,
+} from "@/types/apis";
 import axiosInstance from "./middleware";
 
 export const fetchDocumentResources = async (): Promise<
@@ -43,4 +47,21 @@ export const uploadDocument = async (
   }
 
   return response.data.data;
+};
+
+export const deleteDocument = async (documentId: string) => {
+  const response = await axiosInstance.delete(
+    `/documents/delete/${documentId}`,
+    { baseURL: ENV.BASE_API_URL_CHATS },
+  );
+
+  return response.data;
+};
+
+export const trainDocuments = async (payload: TrainDocumentsPayload) => {
+  const response = await axiosInstance.post("/documents/train", payload, {
+    baseURL: ENV.BASE_API_URL_CHATS,
+  });
+
+  return response.data;
 };

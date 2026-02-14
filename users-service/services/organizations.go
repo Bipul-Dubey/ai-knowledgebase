@@ -12,6 +12,7 @@ import (
 
 type OrganizationService interface {
 	GetOrganizationDetails(orgID string, role string) (*models.OrganizationDetailsResponse, error)
+	GetDashboardStats(orgID string) (*models.DashboardStatsResponse, error)
 }
 type organizationService struct {
 	db *gorm.DB
@@ -88,4 +89,113 @@ func (s *organizationService) GetOrganizationDetails(orgID, role string) (*model
 	}
 
 	return response, nil
+}
+
+func (s *organizationService) GetDashboardStats(orgID string) (*models.DashboardStatsResponse, error) {
+	if orgID == "" {
+		return nil, errors.New("organization ID cannot be empty")
+	}
+
+	orgUUID, err := uuid.Parse(orgID)
+	if err != nil {
+		return nil, errors.New("invalid organization ID")
+	}
+
+	var stats models.DashboardStatsResponse
+
+	// Total Users
+	if err := s.db.Raw(`
+		SELECT COUNT(*)
+		FROM users
+		WHERE organization_id = ?
+		AND is_deleted = false
+	`, orgUUID).Scan(&stats.TotalUsers).Error; err != nil {
+		return nil, err
+	}
+
+	// Total Documents
+	if err := s.db.Raw(`
+		SELECT COUNT(*)
+		FROM documents
+		WHERE organization_id = ?
+	`, orgUUID).Scan(&stats.TotalDocuments).Error; err != nil {
+		return nil, err
+	}
+
+	// Total Chats
+	if err := s.db.Raw(`
+		SELECT COUNT(*)
+		FROM chats
+		WHERE organization_id = ?
+	`, orgUUID).Scan(&stats.TotalChats).Error; err != nil {
+		return nil, err
+	}
+
+	// Total Queries
+	if err := s.db.Raw(`
+		SELECT COUNT(*)
+		FROM messages
+		WHERE organization_id = ?
+		AND role = 'user'
+	`, orgUUID).Scan(&stats.TotalQueries).Error; err != nil {
+		return nil, err
+	}
+
+	// Total Messages
+	if err := s.db.Raw(`
+		SELECT COUNT(*)
+		FROM messages
+		WHERE organization_id = ?
+	`, orgUUID).Scan(&stats.TotalMessages).Error; err != nil {
+		return nil, err
+	}
+
+	// Total Cost
+	if err := s.db.Raw(`
+		SELECT COALESCE(SUM(total_cost), 0)
+		FROM token_usage
+		WHERE organization_id = ?
+	`, orgUUID).Scan(&stats.TotalCost).Error; err != nil {
+		return nil, err
+	}
+
+	// Last 30 Days Activity
+	var activity []models.DailyActivity
+
+	chartQuery := `
+				SELECT
+					d.date::date AS date,
+					COALESCE(c.total_chats, 0) AS total_chats,
+					COALESCE(m.total_messages, 0) AS total_messages
+				FROM
+					generate_series(
+						CURRENT_DATE - INTERVAL '29 days',
+						CURRENT_DATE,
+						INTERVAL '1 day'
+					) AS d(date)
+				LEFT JOIN (
+					SELECT DATE(created_at) AS date, COUNT(*) AS total_chats
+					FROM chats
+					WHERE organization_id = ?
+					AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+					GROUP BY DATE(created_at)
+				) c ON c.date = d.date
+				LEFT JOIN (
+					SELECT DATE(created_at) AS date, COUNT(*) AS total_messages
+					FROM messages
+					WHERE organization_id = ?
+					AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+					GROUP BY DATE(created_at)
+				) m ON m.date = d.date
+				ORDER BY d.date;
+				`
+
+	if err := s.db.Raw(chartQuery, orgUUID, orgUUID).
+		Scan(&activity).Error; err != nil {
+		return nil, err
+	}
+
+	stats.Last30Days = activity
+
+	return &stats, nil
 }

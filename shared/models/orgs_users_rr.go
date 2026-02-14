@@ -118,3 +118,19 @@ type AccountVerificationRequest struct {
 	AccountID string `json:"account_id" binding:"required"`
 	Email     string `json:"email" binding:"required,email"`
 }
+
+type DailyActivity struct {
+	Date          string `json:"date"`
+	TotalChats    int64  `json:"total_chats"`
+	TotalMessages int64  `json:"total_messages"`
+}
+
+type DashboardStatsResponse struct {
+	TotalUsers     int64           `json:"total_users"`
+	TotalDocuments int64           `json:"total_documents"`
+	TotalChats     int64           `json:"total_chats"`
+	TotalQueries   int64           `json:"total_queries"`
+	TotalMessages  int64           `json:"total_messages"`
+	TotalCost      float64         `json:"total_cost"`
+	Last30Days     []DailyActivity `json:"last_30_days"`
+}
