@@ -20,163 +20,16 @@ import {
   MessageResponse,
   MessageToolbar,
 } from "@/components/ai-elements/message";
+import { TMessage } from "@/types";
 import {
   CopyIcon,
   RefreshCcwIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useState } from "react";
 
-type TMessage = {
-  key: string;
-  from: "user" | "assistant";
-  versions?: { id: string; content: string }[];
-  content?: string;
-  attachments?: {
-    id: string;
-    type: "file";
-    url: string;
-    mediaType: string;
-    filename?: string;
-  }[];
-};
-
-const messages: TMessage[] = [
-  {
-    key: nanoid(),
-    from: "user",
-    content: "How do React hooks work and when should I use them?",
-    attachments: [
-      {
-        id: nanoid(),
-        type: "file",
-        url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop",
-        mediaType: "image/jpeg",
-        filename: "palace-of-fine-arts.jpg",
-      },
-      {
-        id: nanoid(),
-        type: "file",
-        url: "",
-        mediaType: "application/pdf",
-        filename: "react-hooks-guide.pdf",
-      },
-    ],
-  },
-  {
-    key: nanoid(),
-    from: "assistant",
-    versions: [
-      {
-        id: nanoid(),
-        content: `# React Hooks Guide
-
-React hooks are functions that let you "hook into" React state and lifecycle features from function components. Here's what you need to know:
-
-## Core Hooks
-
-### useState
-Adds state to functional components:
-
-\`\`\`jsx
-const [count, setCount] = useState(0);
-
-return (
-  <button onClick={() => setCount(count + 1)}>
-    Count: {count}
-  </button>
-);
-\`\`\`
-
-### useEffect
-Handles side effects (data fetching, subscriptions, DOM updates):
-
-\`\`\`jsx
-useEffect(() => {
-  document.title = \`You clicked \${count} times\`;
-
-  // Cleanup function (optional)
-  return () => {
-    document.title = 'React App';
-  };
-}, [count]); // Dependency array
-\`\`\`
-
-## When to Use Hooks
-
-- ✅ **Function components** - Hooks only work in function components
-- ✅ **Replacing class components** - Modern React favors hooks over classes
-- ✅ **Sharing stateful logic** - Create custom hooks to reuse logic
-- ❌ **Class components** - Use lifecycle methods instead
-
-## Rules of Hooks
-
-1. Only call hooks at the **top level** (not inside loops, conditions, or nested functions)
-2. Only call hooks from **React functions** (components or custom hooks)
-
-Would you like to explore more advanced hooks like \`useCallback\` or \`useMemo\`?`,
-      },
-      {
-        id: nanoid(),
-        content: `# React Hooks Guide
-
-React hooks are functions that let you "hook into" React state and lifecycle features from function components. Here's what you need to know:
-
-## Core Hooks
-
-### useState
-Adds state to functional components:
-
-\`\`\`jsx
-const [count, setCount] = useState(0);
-
-return (
-  <button onClick={() => setCount(count + 1)}>
-    Count: {count}
-  </button>
-);
-\`\`\`
-
-### useEffect
-Handles side effects (data fetching, subscriptions, DOM updates):
-
-\`\`\`jsx
-useEffect(() => {
-  document.title = \`You clicked \${count} times\`;
-
-  // Cleanup function (optional)
-  return () => {
-    document.title = 'React App';
-  };
-}, [count]); // Dependency array
-\`\`\`
-
-## When to Use Hooks
-
-- ✅ **Function components** - Hooks only work in function components
-- ✅ **Replacing class components** - Modern React favors hooks over classes
-- ✅ **Sharing stateful logic** - Create custom hooks to reuse logic
-- ❌ **Class components** - Use lifecycle methods instead
-
-## Rules of Hooks
-
-1. Only call hooks at the **top level** (not inside loops, conditions, or nested functions)
-2. Only call hooks from **React functions** (components or custom hooks)
-
-Would you like to explore more advanced hooks like \`useCallback\` or \`useMemo\`?`,
-      },
-    ],
-  },
-  {
-    key: nanoid(),
-    from: "user",
-    content: "hello i am user",
-  },
-];
-
-const Messages = () => {
+const Messages = ({ messages }: { messages: TMessage[] }) => {
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [disliked, setDisliked] = useState<Record<string, boolean>>({});
 

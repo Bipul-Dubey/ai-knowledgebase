@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { NavMain } from "@/components/nav-main";
-import { NavProjects } from "@/components/nav-projects";
+import { NavChats } from "@/components/sidebar-components/nav-chats";
 import { NavUser } from "@/components/nav-user";
 import {
   Sidebar,
@@ -15,10 +15,14 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import Image from "next/image";
-import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
+import { LinkButton } from "../ui/link-button";
+import { PATHS } from "@/constants/paths";
+import { useParams } from "next/navigation";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const params = useParams();
+  const orgId = params.orgId as string;
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -44,10 +48,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain />
-        <Button className="mx-2">
+        <LinkButton className="mx-2" href={PATHS.pl.NEW_CHAT(orgId)}>
           New Chat <Plus />
-        </Button>
-        <NavProjects />
+        </LinkButton>
+        <NavChats />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

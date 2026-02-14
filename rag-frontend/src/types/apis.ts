@@ -52,3 +52,9 @@ export interface OrganizationDetails {
   created_by_user_id: string;
   created_by_user_name: string;
 }
+
+export interface IConversation {
+  id: string;
+  title: string;
+  last_message_at: string;
+}

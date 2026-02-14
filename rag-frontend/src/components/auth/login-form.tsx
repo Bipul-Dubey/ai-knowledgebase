@@ -42,18 +42,22 @@ export function LoginForm({
       },
       {
         onSuccess: (response) => {
-          console.log("Login success response:", response);
-
           const user = response.data;
 
-          // OPTIONAL: store token
-          localStorage.setItem("access_token", user.access_token);
+          if (!user) {
+            enqueueSnackbar("Something went really wrong!", {
+              variant: "error",
+            });
+          } else {
+            // OPTIONAL: store token
+            localStorage.setItem("access_token", user.access_token);
 
-          enqueueSnackbar(response.message, {
-            variant: "success",
-          });
+            enqueueSnackbar(response.message, {
+              variant: "success",
+            });
 
-          router.replace(PATHS.pl.DASHBOARD(response.data.organization_id));
+            router.replace(PATHS.pl.DASHBOARD(user.organization_id));
+          }
         },
         onError: (error: unknown) => {
           let message = "Login failed";
