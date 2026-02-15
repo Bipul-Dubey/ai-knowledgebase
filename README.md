@@ -78,6 +78,6 @@ AWS_S3_BUCKET=ai-knowledgebase-docs
 
 
 # rabbit mq
-RABBITMQ_URL=amqp://guest:guest@localhost:5672//
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 
 ```
