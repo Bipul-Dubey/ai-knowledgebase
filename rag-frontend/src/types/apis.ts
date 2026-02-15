@@ -75,7 +75,7 @@ export interface IDocumentResource {
   file_name: string;
   type: string;
   url: string;
-  status: "untrained" | "training" | "active" | "trained";
+  status: "untrained" | "training" | "trained" | "failed";
   created_at: string;
   last_trained_at: string;
   file_size: number;

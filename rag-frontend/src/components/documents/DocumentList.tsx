@@ -1,34 +1,31 @@
 "use client";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import {
-  FileText,
-  Trash2,
-  Zap,
-  X,
-  MoreHorizontal,
-  List,
-  Grid,
-  Search,
-} from "lucide-react";
+
 import { useState } from "react";
-import { IDocumentResource } from "@/types/apis";
-import { formatFileSize } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FileText, Trash2, Zap, List, Grid, Search, Info } from "lucide-react";
+import { cn, formatFileSize } from "@/lib/utils";
 import {
   useDeleteDocument,
   useDocumentResources,
+  useTrainDocuments,
 } from "@/hooks/useDocumentResources";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function DocumentList() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
+  const [trainingDocId, setTrainingDocId] = useState<string | null>(null);
 
   const {
     data: documents = [],
@@ -37,30 +34,38 @@ export default function DocumentList() {
     refetch,
   } = useDocumentResources();
 
-  const { mutate: deleteDoc, isPending } = useDeleteDocument();
+  const { mutate: deleteDoc } = useDeleteDocument();
+  const { mutate: trainDocs } = useTrainDocuments();
+
+  const onTrainClick = (docId: string) => {
+    setTrainingDocId(docId);
+
+    trainDocs([docId], {
+      onSettled: () => {
+        setTimeout(() => setTrainingDocId(null), 4000);
+      },
+    });
+  };
 
   const handleDelete = (id: string) => {
-    console.log("id:", id);
-
     deleteDoc(id);
   };
 
-  if (isLoading) {
+  const filteredDocuments = documents.filter((doc) =>
+    doc.file_name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  if (isLoading)
     return (
-      <div className="p-6 space-y-3">
-        <div className="h-6 w-1/3 animate-pulse rounded bg-muted" />
-        <div className="h-6 w-full animate-pulse rounded bg-muted" />
-        <div className="h-6 w-full animate-pulse rounded bg-muted" />
-        <div className="h-6 w-2/3 animate-pulse rounded bg-muted" />
+      <div className="p-6 text-sm text-muted-foreground">
+        Loading documents...
       </div>
     );
-  }
 
-  if (isError) {
+  if (isError)
     return (
       <div className="p-6 text-center space-y-3">
         <p className="text-sm text-red-500">Failed to load documents.</p>
-
         <button
           onClick={() => refetch()}
           className="text-sm underline text-muted-foreground hover:text-foreground"
@@ -69,197 +74,166 @@ export default function DocumentList() {
         </button>
       </div>
     );
-  }
-
-  if (!documents || documents.length === 0) {
-    return (
-      <div className="p-6 text-center text-sm text-muted-foreground">
-        No documents uploaded yet.
-      </div>
-    );
-  }
-
-  const filteredDocuments = documents.filter((doc) =>
-    doc.file_name.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
-
-  const getStatusBadge = (status: IDocumentResource["status"]) => {
-    switch (status) {
-      case "active":
-        return (
-          <Badge className="bg-emerald-500 text-sm px-3 py-1">Active</Badge>
-        );
-      case "training":
-        return (
-          <Badge className="bg-orange-500 animate-pulse text-sm px-3 py-1">
-            Training
-          </Badge>
-        );
-      case "trained":
-        return <Badge className="bg-blue-500 text-sm px-3 py-1">Trained</Badge>;
-      case "untrained":
-      default:
-        return (
-          <Badge variant="outline" className="text-sm px-3 py-1">
-            Train
-          </Badge>
-        );
-    }
-  };
-
-  const shouldShowTrainButton = (status: IDocumentResource["status"]) => {
-    return status === "untrained" || status === "active";
-  };
-
-  const buttonContent = (status: IDocumentResource["status"]) => {
-    if (status === "active") {
-      return (
-        <>
-          <X className="w-4 h-4 mr-2" />
-          Untrain
-        </>
-      );
-    }
-    return (
-      <>
-        <Zap className="w-4 h-4 mr-2" />
-        Train
-      </>
-    );
-  };
 
   return (
-    <div className="w-full space-y-4">
-      {/* Readable header */}
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between p-0">
-        <div className="text-base font-semibold text-foreground">
+    <div className="w-full space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
+        <div className="text-lg font-semibold">
           {filteredDocuments.length} / {documents.length} documents
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-          <div className="relative flex-1 max-w-lg">
+
+        <div className="flex gap-2 items-center">
+          <div className="relative w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search documents..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-11 pl-11 pr-4 text-base rounded-xl"
+              className="pl-10"
             />
           </div>
-          <div className="flex gap-1">
-            <Button
-              variant={viewMode === "grid" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("grid")}
-              className="h-11 w-11 p-0"
-            >
-              <Grid className="h-5 w-5" />
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className="h-11 w-11 p-0"
-            >
-              <List className="h-5 w-5" />
-            </Button>
-          </div>
+
+          <Button
+            variant={viewMode === "grid" ? "default" : "outline"}
+            size="icon"
+            onClick={() => setViewMode("grid")}
+          >
+            <Grid className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant={viewMode === "list" ? "default" : "outline"}
+            size="icon"
+            onClick={() => setViewMode("list")}
+          >
+            <List className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {/* Readable document grid */}
+      {/* Document Grid / List */}
       <div
         className={
           viewMode === "grid"
-            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-            : "space-y-3"
+            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+            : "space-y-4"
         }
       >
         {filteredDocuments.map((doc) => (
           <div
             key={doc.id}
-            className="group border border-border/70 hover:border-orange-400/70 hover:shadow-md bg-card/80 rounded-xl p-4 transition-all overflow-hidden"
+            className="border rounded-xl p-5 bg-card hover:shadow-md transition-all space-y-4"
           >
-            <div className="space-y-3">
-              {/* Top row: icon + name + menu */}
-              <div className="flex items-start justify-between gap-3">
-                <div
-                  className="flex items-center space-x-3 flex-1 min-w-0"
-                  title={doc.file_name}
-                >
-                  <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-orange-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-base leading-6 truncate">
-                      {doc.file_name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatFileSize(doc.file_size)}
-                    </p>
-                  </div>
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="h-10 w-10 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem
-                      onClick={() => handleDelete(doc.id)}
-                      className="text-destructive"
-                      disabled={isPending}
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete document
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+            {/* File Info */}
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-orange-600" />
               </div>
 
-              {/* Bottom row: status + action */}
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(doc.status)}
-                  {doc.status === "active" && doc.last_trained_at && (
-                    <span className="text-sm text-muted-foreground">
-                      Trained {doc.last_trained_at}
-                    </span>
-                  )}
-                </div>
-
-                {shouldShowTrainButton(doc.status) && (
-                  <Button
-                    size="sm"
-                    variant={doc.status === "active" ? "outline" : "default"}
-                    // onClick={() => toggleTrain(doc.id)}
-                    className="h-10 px-4 text-sm font-medium"
-                  >
-                    {buttonContent(doc.status)}
-                  </Button>
-                )}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold truncate">{doc.file_name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {formatFileSize(doc.file_size)}
+                </p>
               </div>
             </div>
+
+            {/* Status + Actions */}
+            <div className="flex items-center justify-between">
+              {/* Status Badge */}
+              <span
+                className={cn(
+                  "flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full capitalize",
+                  doc.status === "untrained" &&
+                    "bg-muted text-muted-foreground",
+                  doc.status === "training" &&
+                    "bg-orange-100 text-orange-700 animate-pulse",
+                  doc.status === "trained" && "bg-blue-100 text-blue-700",
+                  doc.status === "failed" && "bg-red-100 text-red-700",
+                )}
+              >
+                <span className="w-2 h-2 rounded-full bg-current" />
+                {doc.status}
+              </span>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                {/* Train Button */}
+                {doc.status === "training" ? (
+                  <Button size="sm">
+                    <Zap className="w-4 h-4 mr-1" />
+                    Training...
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant={doc.status === "untrained" ? "default" : "outline"}
+                    className={cn(
+                      doc.status === "failed" &&
+                        "border-red-500 text-red-600 hover:bg-red-50",
+                    )}
+                    onClick={() => onTrainClick(doc.id)}
+                  >
+                    <Zap className="w-4 h-4 mr-1" />
+                    {doc.status === "untrained" && "Train"}
+                    {doc.status === "trained" && "Retrain"}
+                    {doc.status === "failed" && "Retry"}
+                  </Button>
+                )}
+
+                {/* Delete */}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {`Delete "${doc.file_name}"?`}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(doc.id)}
+                        className="bg-destructive hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+
+            {/* Training Info Banner */}
+            {trainingDocId === doc.id && (
+              <div className="flex items-start gap-2 rounded-md bg-blue-50 border border-blue-200 p-3 text-blue-700 text-sm">
+                <Info className="w-4 h-4 mt-0.5" />
+                Training has started for this document. It will complete
+                shortly.
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Readable empty state */}
+      {/* Empty State */}
       {filteredDocuments.length === 0 && (
-        <div className="p-12 border-2 border-dashed border-muted rounded-xl text-center bg-muted/30">
-          <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2 text-foreground">
-            No documents found
-          </h3>
-          <p className="text-base text-muted-foreground">
-            {searchTerm
-              ? "Try different keywords or clear the search."
-              : "Upload your first document to get started."}
-          </p>
+        <div className="p-12 border-2 border-dashed rounded-xl text-center text-muted-foreground">
+          No documents found.
         </div>
       )}
     </div>

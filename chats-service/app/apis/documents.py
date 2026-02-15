@@ -60,7 +60,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 INSERT INTO documents
                     (created_by, organization_id, file_name, s3_key,
                     file_size, status, trainable, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, 'active', TRUE, NOW(), NOW())
+                VALUES (%s, %s, %s, %s, %s, 'untrained', TRUE, NOW(), NOW())
                 RETURNING id, file_name, file_size, created_at
                 """,
                 (user_id, org_id, file.filename, s3_key, file_size),
@@ -126,30 +126,62 @@ async def download_document(document_id: str, request: Request):
 # =======================
 # 🧠 3️⃣ Train Documents
 # =======================
+
 class TrainRequest(BaseModel):
     document_ids: Optional[List[str]] = None
+
 
 @router.post("/train")
 async def train_documents_endpoint(request: Request, body: TrainRequest):
     claims = getattr(request.state, "claims", None)
     if not claims:
-        return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
+        return APIResponse(
+            True, "Unauthorized", None,
+            status.HTTP_401_UNAUTHORIZED
+        )
 
     org_id = claims.get("organization_id")
     user_id = claims.get("user_id")
     document_ids = body.document_ids or []
 
     try:
-        if not document_ids:
-            async with get_db_cursor() as cur:
+        async with get_db_cursor(commit=True) as cur:
+
+            # 1️⃣ If no document_ids passed → fetch all trainable documents
+            if not document_ids:
                 await cur.execute(
-                    "SELECT id FROM documents WHERE organization_id=%s AND trainable=TRUE",
+                    """
+                    SELECT id
+                    FROM documents
+                    WHERE organization_id=%s
+                    AND trainable=TRUE
+                    """,
                     (org_id,),
                 )
                 rows = await cur.fetchall()
                 document_ids = [r["id"] for r in rows]
 
-        async with get_db_cursor(commit=True) as cur:
+            if not document_ids:
+                return APIResponse(
+                    True,
+                    "No trainable documents found",
+                    None,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+            # 2️⃣ Update document status → training
+            await cur.execute(
+                """
+                UPDATE documents
+                SET status='training',
+                    updated_at=NOW()
+                WHERE organization_id=%s
+                AND id = ANY(%s)
+                """,
+                (org_id, document_ids),
+            )
+
+            # 3️⃣ Create training job
             await cur.execute(
                 """
                 INSERT INTO training_jobs
@@ -161,12 +193,18 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
             )
             job = await cur.fetchone()
 
-        run_training_job.delay(job["id"], org_id, user_id, document_ids)
+        # 4️⃣ Trigger async training
+        run_training_job.delay(
+            job["id"], org_id, user_id, document_ids
+        )
 
         return APIResponse(
             False,
             "Training job queued successfully",
-            {"job_id": job["id"], "total_documents": len(document_ids)},
+            {
+                "job_id": job["id"],
+                "total_documents": len(document_ids),
+            },
             status.HTTP_202_ACCEPTED,
         )
 

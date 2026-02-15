@@ -132,7 +132,7 @@ async def train_sources(
     # Process documents
     for doc in documents:
         doc_id = doc["id"]
-        await update_document_status(doc_id, "processing")
+        await update_document_status(doc_id, "training")
 
         try:
             content = await FileManager.get_text_from_source(
@@ -182,7 +182,7 @@ async def train_sources(
                         ),
                     )
 
-            await update_document_status(doc_id, "active")
+            await update_document_status(doc_id, "trained")
             total_chunks += len(chunks)
             any_success = True
 

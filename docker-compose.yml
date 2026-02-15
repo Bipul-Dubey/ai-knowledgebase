@@ -25,7 +25,8 @@ services:
       context: .
       dockerfile: chats-service/Dockerfile
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "50051:50051"
     environment:
@@ -49,6 +50,11 @@ services:
       - "15672:15672"
     networks:
       - microservices-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # frontend-service:
   #   build:

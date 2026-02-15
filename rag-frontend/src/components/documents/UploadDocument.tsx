@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import { Upload, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -20,15 +19,17 @@ export function UploadDocumentModal() {
 
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
 
   const { mutate, isPending } = useUploadDocument();
 
   const handleUpload = () => {
-    if (!file || !title.trim()) return;
+    if (!file) return;
 
     mutate(
-      { file, title },
+      {
+        file,
+        title: file.name, // Pass filename automatically
+      },
       {
         onSuccess: () => {
           resetState();
@@ -40,7 +41,6 @@ export function UploadDocumentModal() {
 
   const resetState = () => {
     setFile(null);
-    setTitle("");
   };
 
   return (
@@ -79,7 +79,7 @@ export function UploadDocumentModal() {
             }}
           />
 
-          {/* Drag & Drop Styled Area */}
+          {/* Upload Area */}
           <div
             onClick={() => fileInputRef.current?.click()}
             className={cn(
@@ -119,16 +119,6 @@ export function UploadDocumentModal() {
             )}
           </div>
 
-          {/* Title Input */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Document Title</label>
-            <Input
-              placeholder="Enter document title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
           {/* Action Buttons */}
           <div className="flex justify-end gap-2 pt-2">
             <Button
@@ -139,10 +129,7 @@ export function UploadDocumentModal() {
               Cancel
             </Button>
 
-            <Button
-              onClick={handleUpload}
-              disabled={!file || !title.trim() || isPending}
-            >
+            <Button onClick={handleUpload} disabled={!file || isPending}>
               {isPending ? "Uploading..." : "Upload"}
             </Button>
           </div>
