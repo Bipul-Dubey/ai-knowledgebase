@@ -5,6 +5,7 @@ type ChatStore = {
   messages: TMessage[];
   isStreaming: boolean;
   isWaitingResponse: boolean;
+  lastChatId: string | null;
 
   abortController: AbortController | null;
 
@@ -20,6 +21,7 @@ type ChatStore = {
   setWaitingResponse: (val: boolean) => void;
   setAbortController: (controller: AbortController | null) => void;
   cancelStream: () => void;
+  setLastChatId: (chatId: string | null) => void;
 
   clear: () => void;
 };
@@ -30,6 +32,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isStreaming: false,
   abortController: null,
   isWaitingResponse: false,
+  lastChatId: null,
 
   addMessage: (message) =>
     set((state) => ({
@@ -66,6 +69,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     set({ isStreaming: false, abortController: null });
   },
+
+  setLastChatId: (chatId) =>
+    set({
+      lastChatId: chatId,
+    }),
 
   clear: () =>
     set({

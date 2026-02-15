@@ -67,15 +67,41 @@ async def update_training_job_status(
 # Document Status
 async def update_document_status(doc_id, status, error_message=None):
     async with get_db_cursor(commit=True) as cur:
-        await cur.execute(
-            """
-            UPDATE documents
-            SET status = %s,
-                updated_at = NOW()
-            WHERE id = %s
-            """,
-            (status, doc_id),
-        )
+        if status == "trained":
+            await cur.execute(
+                """
+                UPDATE documents
+                SET status = %s,
+                    last_trained_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND deleted_at IS NULL
+                """,
+                (status, doc_id),
+            )
+        elif status == "failed":
+            await cur.execute(
+                """
+                UPDATE documents
+                SET status = %s,
+                    last_trained_at = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND deleted_at IS NULL
+                """,
+                (status, doc_id),
+            )
+        else:
+            await cur.execute(
+                """
+                UPDATE documents
+                SET status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND deleted_at IS NULL
+                """,
+                (status, doc_id),
+            )
 
 
 # Utility: safe embedding conversion
@@ -111,8 +137,9 @@ async def train_sources(
                 SELECT id, s3_key
                 FROM documents
                 WHERE organization_id = %s
-                  AND id = ANY(%s)
-                  AND trainable = TRUE
+                AND id = ANY(%s)
+                AND trainable = TRUE
+                AND deleted_at IS NULL
                 """,
                 (org_id, document_ids),
             )
@@ -122,7 +149,8 @@ async def train_sources(
                 SELECT id, s3_key
                 FROM documents
                 WHERE organization_id = %s
-                  AND trainable = TRUE
+                AND trainable = TRUE
+                AND deleted_at IS NULL
                 """,
                 (org_id,),
             )

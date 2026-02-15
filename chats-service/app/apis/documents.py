@@ -5,9 +5,7 @@ from app.helpers.s3_storage import upload_file_to_s3, get_presigned_url
 from app.helpers.train_document import run_training_job
 from pydantic import BaseModel
 from typing import List, Optional, Literal
-from datetime import datetime, timezone
 from hashlib import sha256
-from app.helpers.s3_storage import delete_s3_object, S3DeletionError
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -95,7 +93,7 @@ async def download_document(document_id: str, request: Request):
                 """
                 SELECT s3_key
                 FROM documents
-                WHERE id=%s AND organization_id=%s AND status='active'
+                WHERE id=%s AND organization_id=%s AND deleted_at IS NULL
                 """,
                 (document_id, org_id),
             )
@@ -154,7 +152,9 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
                     SELECT id
                     FROM documents
                     WHERE organization_id=%s
-                    AND trainable=TRUE
+                      AND trainable=TRUE
+                      AND deleted_at IS NULL
+                      AND status IN ('untrained','trained','failed')
                     """,
                     (org_id,),
                 )
@@ -169,17 +169,33 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
                     status.HTTP_400_BAD_REQUEST,
                 )
 
-            # 2️⃣ Update document status → training
+            # 2️⃣ Update status → training
+            #    Also reset last_trained_at
             await cur.execute(
                 """
                 UPDATE documents
                 SET status='training',
+                    last_trained_at = NULL,
                     updated_at=NOW()
                 WHERE organization_id=%s
-                AND id = ANY(%s)
+                  AND id = ANY(%s)
+                  AND deleted_at IS NULL
+                  AND status IN ('untrained','trained','failed')
+                RETURNING id
                 """,
                 (org_id, document_ids),
             )
+
+            updated_docs = await cur.fetchall()
+            updated_ids = [r["id"] for r in updated_docs]
+
+            if not updated_ids:
+                return APIResponse(
+                    True,
+                    "No eligible documents to train",
+                    None,
+                    status.HTTP_400_BAD_REQUEST,
+                )
 
             # 3️⃣ Create training job
             await cur.execute(
@@ -193,9 +209,9 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
             )
             job = await cur.fetchone()
 
-        # 4️⃣ Trigger async training
+        # 4️⃣ Trigger async worker
         run_training_job.delay(
-            job["id"], org_id, user_id, document_ids
+            job["id"], org_id, user_id, updated_ids
         )
 
         return APIResponse(
@@ -203,7 +219,7 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
             "Training job queued successfully",
             {
                 "job_id": job["id"],
-                "total_documents": len(document_ids),
+                "total_documents": len(updated_ids),
             },
             status.HTTP_202_ACCEPTED,
         )
@@ -238,6 +254,7 @@ async def list_documents(
             SELECT id, file_name, status, created_at, file_size
             FROM documents
             WHERE organization_id = %s
+              AND deleted_at IS NULL
         """
         params = [org_id]
 
@@ -301,8 +318,85 @@ async def set_trainable_bulk(request: Request, body: TrainableUpdateBulkRequest)
         )
 
 
+# # =======================
+# # 🗑️ Delete Document (Hard Delete)
+# # =======================
+# @router.delete("/delete/{document_id}")
+# async def delete_document(document_id: str, request: Request):
+#     claims = getattr(request.state, "claims", None)
+#     if not claims:
+#         return APIResponse(
+#             True,
+#             "Unauthorized",
+#             None,
+#             status.HTTP_401_UNAUTHORIZED,
+#         )
+
+#     org_id = claims.get("organization_id")
+
+#     try:
+#         async with get_db_cursor() as cur:
+
+#             # 1️⃣ Get document & verify ownership
+#             await cur.execute(
+#                 """
+#                 SELECT s3_key
+#                 FROM documents
+#                 WHERE id=%s AND organization_id=%s
+#                 """,
+#                 (document_id, org_id),
+#             )
+#             doc = await cur.fetchone()
+
+#             if not doc:
+#                 return APIResponse(
+#                     True,
+#                     "Document not found",
+#                     None,
+#                     status.HTTP_404_NOT_FOUND,
+#                 )
+
+#             s3_key = doc["s3_key"]
+
+#             # 2️⃣ Delete from S3 first
+#             try:
+#                 await delete_s3_object(s3_key)   # ✅ MUST await
+#             except S3DeletionError as s3_error:   # ✅ catch specific error
+#                 print(f"[S3 DELETE ERROR] {s3_error}")
+#                 return APIResponse(
+#                     True,
+#                     "Failed to delete file from S3",
+#                     {"error": str(s3_error)},
+#                     status.HTTP_500_INTERNAL_SERVER_ERROR,
+#                 )
+
+#             # 3️⃣ Delete from DB
+#             await cur.execute(
+#                 """
+#                 DELETE FROM documents
+#                 WHERE id=%s AND organization_id=%s
+#                 """,
+#                 (document_id, org_id),
+#             )
+
+#         return APIResponse(
+#             False,
+#             "Document deleted successfully",
+#             None,
+#         )
+
+#     except Exception as e:
+#         print(f"[DELETE ERROR] {e}")
+#         return APIResponse(
+#             True,
+#             "Failed to delete document",
+#             {"error": str(e)},
+#             status.HTTP_500_INTERNAL_SERVER_ERROR,
+#         )
+
+
 # =======================
-# 🗑️ Delete Document (Hard Delete)
+# 🗑️ Delete Document (Soft Delete)
 # =======================
 @router.delete("/delete/{document_id}")
 async def delete_document(document_id: str, request: Request):
@@ -318,14 +412,16 @@ async def delete_document(document_id: str, request: Request):
     org_id = claims.get("organization_id")
 
     try:
-        async with get_db_cursor() as cur:
+        async with get_db_cursor(commit=True) as cur:
 
-            # 1️⃣ Get document & verify ownership
+            # 1️⃣ Verify document exists & ownership
             await cur.execute(
                 """
-                SELECT s3_key
+                SELECT id
                 FROM documents
-                WHERE id=%s AND organization_id=%s
+                WHERE id=%s
+                  AND organization_id=%s
+                  AND deleted_at IS NULL
                 """,
                 (document_id, org_id),
             )
@@ -339,25 +435,16 @@ async def delete_document(document_id: str, request: Request):
                     status.HTTP_404_NOT_FOUND,
                 )
 
-            s3_key = doc["s3_key"]
-
-            # 2️⃣ Delete from S3 first
-            try:
-                await delete_s3_object(s3_key)   # ✅ MUST await
-            except S3DeletionError as s3_error:   # ✅ catch specific error
-                print(f"[S3 DELETE ERROR] {s3_error}")
-                return APIResponse(
-                    True,
-                    "Failed to delete file from S3",
-                    {"error": str(s3_error)},
-                    status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-            # 3️⃣ Delete from DB
+            # 2️⃣ Soft delete
             await cur.execute(
                 """
-                DELETE FROM documents
-                WHERE id=%s AND organization_id=%s
+                UPDATE documents
+                SET deleted_at = NOW(),
+                    last_trained_at = NULL,
+                    status = 'untrained',
+                    updated_at = NOW()
+                WHERE id=%s
+                  AND organization_id=%s
                 """,
                 (document_id, org_id),
             )

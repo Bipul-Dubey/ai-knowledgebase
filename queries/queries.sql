@@ -80,7 +80,8 @@ CREATE TABLE documents (
     status VARCHAR(20) DEFAULT 'pending',
     trainable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    last_trained_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_documents_org ON documents(organization_id);
@@ -137,7 +138,8 @@ CREATE TABLE chats (
     status VARCHAR(20) DEFAULT 'active',
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
-    last_message_at TIMESTAMPTZ
+    last_message_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_chats_org ON chats(organization_id);

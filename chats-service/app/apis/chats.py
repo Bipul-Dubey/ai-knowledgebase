@@ -24,7 +24,12 @@ class ChatListResponse(BaseModel):
 async def get_chats_list(request: Request):
     claims = getattr(request.state, "claims", None)
     if not claims:
-        return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
+        return APIResponse(
+            True,
+            "Unauthorized",
+            None,
+            status.HTTP_401_UNAUTHORIZED,
+        )
 
     org_id = claims.get("organization_id")
     user_id = claims.get("user_id")
@@ -36,22 +41,35 @@ async def get_chats_list(request: Request):
                 """
                 SELECT id, title, last_message_at
                 FROM chats
-                WHERE organization_id = %s AND status = 'active' AND user_id = %s
+                WHERE organization_id = %s
+                  AND user_id = %s
+                  AND status = 'active'
+                  AND deleted_at IS NULL
                 ORDER BY last_message_at DESC NULLS LAST, created_at DESC
                 """,
-                (org_id, user_id)
+                (org_id, user_id),
             )
             rows = await cur.fetchall()
 
         chat_list = [
-            {"id": r["id"], "title": r["title"], "last_message_at": r["last_message_at"]}
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "last_message_at": r["last_message_at"],
+            }
             for r in rows
         ]
+
         return APIResponse(False, "Chats fetched successfully", chat_list)
 
     except Exception as e:
         print(f"[CHAT LIST ERROR] {e}")
-        return APIResponse(True, f"Failed to fetch chats: {e}", None, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return APIResponse(
+            True,
+            f"Failed to fetch chats: {e}",
+            None,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 # --------------------------
 # Chat Query SSE Endpoint
@@ -162,40 +180,69 @@ async def get_chat_messages(chat_id: str, request: Request):
 @router.delete("/{chat_id}")
 async def delete_chat(chat_id: str, request: Request):
     """
-    Delete a chat and all its messages and attachments.
+    Soft delete a chat.
     Organization ID is taken from JWT claims for multi-tenant safety.
     """
+
     claims = getattr(request.state, "claims", None)
     if not claims:
-        return APIResponse(True, "Unauthorized", None, status.HTTP_401_UNAUTHORIZED)
+        return APIResponse(
+            True,
+            "Unauthorized",
+            None,
+            status.HTTP_401_UNAUTHORIZED
+        )
 
     org_id = claims.get("organization_id")
 
     try:
-        # Use get_db_cursor with commit=True for automatic commit after deletion
         async with get_db_cursor(commit=True) as cur:
-            # Check if chat exists and belongs to the user's org
+
+            # 1️⃣ Verify chat exists & not already deleted
             await cur.execute(
-                "SELECT id FROM chats WHERE id=%s AND organization_id=%s",
-                (chat_id, org_id)
+                """
+                SELECT id
+                FROM chats
+                WHERE id = %s
+                  AND organization_id = %s
+                  AND deleted_at IS NULL
+                """,
+                (chat_id, org_id),
             )
             chat = await cur.fetchone()
-            if not chat:
-                return APIResponse(True, "Chat not found or not authorized", None, status.HTTP_404_NOT_FOUND)
 
-            # Delete the chat (messages & attachments will cascade)
+            if not chat:
+                return APIResponse(
+                    True,
+                    "Chat not found or already deleted",
+                    None,
+                    status.HTTP_404_NOT_FOUND
+                )
+
+            # 2️⃣ Soft delete
             await cur.execute(
-                "DELETE FROM chats WHERE id=%s AND organization_id=%s",
-                (chat_id, org_id)
+                """
+                UPDATE chats
+                SET deleted_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND organization_id = %s
+                """,
+                (chat_id, org_id),
             )
 
-        return APIResponse(False, "Chat deleted successfully", {"chat_id": chat_id}, status.HTTP_200_OK)
+        return APIResponse(
+            False,
+            "Chat deleted successfully",
+            {"chat_id": chat_id},
+            status.HTTP_200_OK
+        )
 
     except Exception as e:
         print(f"[DELETE CHAT ERROR] {e}")
         return APIResponse(
-            error=True,
-            message=f"Failed to delete chat: {e}",
-            data=None,
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            True,
+            f"Failed to delete chat: {e}",
+            None,
+            status.HTTP_500_INTERNAL_SERVER_ERROR
         )

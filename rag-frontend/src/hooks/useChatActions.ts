@@ -16,6 +16,8 @@ export const useChatActions = () => {
   const params = useParams<{ orgId: string; chatId: string }>();
   const { chatId, orgId } = params;
   const {
+    lastChatId,
+    setLastChatId,
     addMessage,
     appendVersionChunk,
     setStreaming,
@@ -27,8 +29,6 @@ export const useChatActions = () => {
 
   const sendMessage = async (input: string, options?: SendOptions) => {
     if (!input.trim()) return;
-
-    console.log("options?.isNewChat:", options?.isNewChat);
 
     const token =
       typeof window !== "undefined"
@@ -62,6 +62,11 @@ export const useChatActions = () => {
     setAbortController(controller);
     setStreaming(true);
     setWaitingResponse(true);
+
+    if (lastChatId != chatId) {
+      refetch();
+      setLastChatId(chatId);
+    }
 
     try {
       const response = await fetch(`${ENV.BASE_API_URL_CHATS}/chats/query`, {
