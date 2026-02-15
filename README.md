@@ -50,11 +50,19 @@ python app.py
 
 ```bash
 SMTP_USER=
-SMTP_PASSWORD=h
+SMTP_PASSWORD=
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 
+PORT=8080
+DB_HOST=host.docker.internal
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=root
+DB_NAME=ai_knowledgebase
+CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 FRONTEND_BASE_URL=http://localhost:3000
+
 ```
 
 ### Python - chats service

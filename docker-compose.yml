@@ -5,15 +5,8 @@ services:
       dockerfile: users-service/Dockerfile
     ports:
       - "8080:8080"
-    environment:
-      - PORT=8080
-      - DB_HOST=host.docker.internal
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=root
-      - DB_NAME=ai_knowledgebase
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
-      - FRONTEND_BASE_URL=http://localhost:3000
+    env_file:
+      - users-service/.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
