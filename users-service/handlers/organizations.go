@@ -35,3 +35,23 @@ func (h *OrganizationHandler) GetOrganizationDetails(c *gin.Context) {
 
 	c.JSON(http.StatusOK, utils.APIResponse(false, "organization details fetched", resp))
 }
+
+func (h *OrganizationHandler) GetDashboardStats(c *gin.Context) {
+	claimsRaw, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized))
+		return
+	}
+
+	claims := claimsRaw.(*utils.JWTClaims)
+	orgID := claims.OrganizationID
+	userId := claims.UserID
+
+	stats, err := h.orgService.GetDashboardStats(orgID, userId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.APIResponse(true, err.Error(), nil, http.StatusBadRequest))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.APIResponse(false, "dashboard stats fetched", stats))
+}

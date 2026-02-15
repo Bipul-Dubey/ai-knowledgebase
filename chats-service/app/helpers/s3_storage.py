@@ -108,3 +108,27 @@ async def invalidate_presigned_url(document_id: str):
         print(f"[S3 INVALIDATE] Presigned URL invalidated for document {document_id}")
     except Exception as e:
         print(f"[S3 INVALIDATE ERROR] Failed to invalidate URL for {document_id}: {e}")
+
+
+class S3DeletionError(Exception):
+    """Raised when S3 deletion fails"""
+    pass
+
+
+async def delete_s3_object(s3_key: str) -> None:
+    """
+    Deletes file from S3 safely.
+    Raises S3DeletionError if deletion fails.
+    """
+
+    if not s3_key:
+        raise ValueError("Invalid S3 key")
+
+    try:
+        await asyncio.to_thread(
+            s3_client.delete_object,
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+        )
+    except (BotoCoreError, ClientError) as e:
+        raise S3DeletionError(f"S3 deletion failed: {str(e)}")

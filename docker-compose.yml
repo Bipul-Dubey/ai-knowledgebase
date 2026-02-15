@@ -12,6 +12,8 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=root
       - DB_NAME=ai_knowledgebase
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+      - FRONTEND_BASE_URL=http://localhost:3000
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -22,6 +24,9 @@ services:
     build:
       context: .
       dockerfile: chats-service/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "50051:50051"
     environment:
@@ -31,27 +36,41 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=root
       - DB_NAME=ai_knowledgebase
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - microservices-network
     restart: unless-stopped
 
-  frontend-service:
-    build:
-      context: ./rag-frontend
-      dockerfile: Dockerfile
+  rabbitmq:
+    image: rabbitmq:3-management
     ports:
-      - "3005:3000"
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      # If your frontend needs to talk to backend services, you can add URLs here
-      - NEXT_PUBLIC_USERS_SERVICE_URL=http://users-service:8080
-      - NEXT_PUBLIC_CHATS_SERVICE_URL=http://chats-service:50051
+      - "5672:5672"
+      - "15672:15672"
     networks:
       - microservices-network
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # frontend-service:
+  #   build:
+  #     context: ./rag-frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3005:3000"
+  #   environment:
+  #     - NODE_ENV=production
+  #     - PORT=3000
+  #     # If your frontend needs to talk to backend services, you can add URLs here
+  #     - NEXT_PUBLIC_USERS_SERVICE_URL=http://users-service:8080
+  #     - NEXT_PUBLIC_CHATS_SERVICE_URL=http://chats-service:50051
+  #   networks:
+  #     - microservices-network
+  #   restart: unless-stopped
 
 networks:
   microservices-network:

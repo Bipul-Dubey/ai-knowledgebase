@@ -8,8 +8,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRoutes(h *handlers.HandlerManager, db *gorm.DB) *gin.Engine {
-	r := gin.Default()
+func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.Engine {
+	// r := gin.Default()
 
 	api := r.Group("/api/v1")
 	{
@@ -29,6 +29,7 @@ func SetupRoutes(h *handlers.HandlerManager, db *gorm.DB) *gin.Engine {
 			auth.POST("/reset-password", h.AuthenticationHandler.ResetPassword)
 			api.POST("users/resend-verification", h.AuthenticationHandler.ResendVerificationEmail)
 			auth.GET("/organization/details", h.OrganizationHandler.GetOrganizationDetails)
+			auth.GET("/organization/dashboard-stats", middleware.AuthMiddleware(db), h.OrganizationHandler.GetDashboardStats)
 		}
 
 	}

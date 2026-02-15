@@ -5,9 +5,11 @@ import (
 	"os"
 
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/db"
+	"github.com/Bipul-Dubey/ai-knowledgebase/shared/middleware"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/handlers"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/routes"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/services"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
@@ -38,8 +40,17 @@ func main() {
 	// Initialize handler layer
 	handlerManager := handlers.NewHandlerManager(serviceManager)
 
-	// Setup routes
-	r := routes.SetupRoutes(handlerManager, database)
+	r := gin.New()
+
+	r.Use(middleware.CORSMiddleware())
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(204)
+	})
+
+	routes.SetupRoutes(r, handlerManager, database)
 
 	port := os.Getenv("PORT")
 	if port == "" {

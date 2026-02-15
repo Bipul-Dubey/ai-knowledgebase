@@ -16,7 +16,11 @@ JWT_ALGORITHM = "HS256"
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # 🔹 Skip auth for docs & OpenAPI
+        # ✅ 1. Always allow preflight requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        # ✅ 2. Skip auth for docs & OpenAPI
         if request.url.path.startswith("/docs") or \
            request.url.path.startswith("/redoc") or \
            request.url.path.startswith("/openapi.json"):
