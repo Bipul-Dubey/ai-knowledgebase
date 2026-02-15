@@ -69,19 +69,18 @@ export function TrendChart() {
   const maxValue = React.useMemo(() => {
     if (!chartData.length) return 10;
 
-    const max = Math.max(
-      ...chartData.flatMap((item) => [item.chats, item.messages]),
-    );
+    const max = Math.max(...chartData.map((item) => item[activeChart] ?? 0));
 
-    // Add 10% padding
+    if (max === 0) return 10;
+
     const padded = max * 1.1;
 
-    // Round to nearest nice number
     const magnitude = Math.pow(10, Math.floor(Math.log10(padded)));
+
     const rounded = Math.ceil(padded / magnitude) * magnitude;
 
     return rounded;
-  }, [chartData]);
+  }, [chartData, activeChart]);
 
   return (
     <Card className="py-4 sm:py-0">

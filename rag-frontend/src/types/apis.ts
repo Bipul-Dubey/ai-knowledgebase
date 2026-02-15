@@ -88,12 +88,23 @@ export interface DailyActivity {
 }
 
 export interface DashboardStatsResponse {
+  organization_name: string;
+  user_name: string;
+  user_role: string;
+  // Users
   total_users: number;
+  active_users: number;
+  // Documents
   total_documents: number;
+  active_documents: number;
+  // Chats
   total_chats: number;
+  active_chats: number;
+  // Messages & Cost
   total_queries: number;
   total_messages: number;
   total_cost: number;
+
   last_30_days: DailyActivity[];
 }
 

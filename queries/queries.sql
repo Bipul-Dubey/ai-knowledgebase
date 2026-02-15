@@ -81,7 +81,8 @@ CREATE TABLE documents (
     trainable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
-    last_trained_at TIMESTAMPTZ
+    last_trained_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_documents_org ON documents(organization_id);

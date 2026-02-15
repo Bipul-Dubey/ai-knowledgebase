@@ -126,11 +126,26 @@ type DailyActivity struct {
 }
 
 type DashboardStatsResponse struct {
-	TotalUsers     int64           `json:"total_users"`
-	TotalDocuments int64           `json:"total_documents"`
-	TotalChats     int64           `json:"total_chats"`
-	TotalQueries   int64           `json:"total_queries"`
-	TotalMessages  int64           `json:"total_messages"`
-	TotalCost      float64         `json:"total_cost"`
-	Last30Days     []DailyActivity `json:"last_30_days"`
+	OrganizationName string `json:"organization_name"`
+	UserName         string `json:"user_name"`
+	UserRole         string `json:"user_role"`
+
+	// Users
+	TotalUsers  int64 `json:"total_users"`
+	ActiveUsers int64 `json:"active_users"`
+
+	// Documents
+	TotalDocuments  int64 `json:"total_documents"`
+	ActiveDocuments int64 `json:"active_documents"`
+
+	// Chats
+	TotalChats  int64 `json:"total_chats"`
+	ActiveChats int64 `json:"active_chats"`
+
+	// Messages & Cost
+	TotalQueries  int64   `json:"total_queries"`
+	TotalMessages int64   `json:"total_messages"`
+	TotalCost     float64 `json:"total_cost"`
+
+	Last30Days []DailyActivity `json:"last_30_days"`
 }

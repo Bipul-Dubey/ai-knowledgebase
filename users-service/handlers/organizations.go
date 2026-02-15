@@ -45,8 +45,9 @@ func (h *OrganizationHandler) GetDashboardStats(c *gin.Context) {
 
 	claims := claimsRaw.(*utils.JWTClaims)
 	orgID := claims.OrganizationID
+	userId := claims.UserID
 
-	stats, err := h.orgService.GetDashboardStats(orgID)
+	stats, err := h.orgService.GetDashboardStats(orgID, userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.APIResponse(true, err.Error(), nil, http.StatusBadRequest))
 		return
