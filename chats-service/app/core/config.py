@@ -5,7 +5,7 @@ load_dotenv()
 
 class Settings:
     ENV = os.getenv("ENV", "development")
-    PORT = int(os.getenv("PORT", 50051))
+    PORT = int(os.getenv("CHAT_PORT", 50051))
     DB_TYPE = os.getenv("DB_TYPE", "postgres")
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = os.getenv("DB_PORT", "5432")
@@ -23,5 +23,7 @@ class Settings:
     # RABBITMQ
     RABBITMQ_URL = os.getenv("RABBITMQ_URL")
     RABBITMQ_BACKEND = os.getenv("RABBITMQ_BACKEND")
+
+    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL")
     
 settings = Settings()

@@ -5,16 +5,17 @@ from app.apis.documents import router as documents
 from app.apis.chats import router as chats
 from app.middleware.auth import AuthMiddleware
 from app.utils.errors import register_exception_handlers
+from app.core.config import settings
 
 app = FastAPI(title="Chats Service")
 
 # ✅ CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # your frontend origin
+    allow_origins=[settings.FRONTEND_BASE_URL],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],  # needed for Authorization header
+    allow_headers=["*"],
 )
 
 # Startup / Shutdown

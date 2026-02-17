@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - users-service/.env
+      - .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -22,14 +22,8 @@ services:
         condition: service_healthy
     ports:
       - "50051:50051"
-    environment:
-      - PORT=50051
-      - DB_HOST=host.docker.internal
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=root
-      - DB_NAME=ai_knowledgebase
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    env_file:
+      - .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
