@@ -10,6 +10,7 @@ Keep secrets (like DB password) outside the repo by using local `.env` files or 
 ENV=development
 
 # database config
+# host.docker.internal (DB_HOST - for local DB in docker)
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
