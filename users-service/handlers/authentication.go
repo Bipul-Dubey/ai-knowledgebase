@@ -7,7 +7,6 @@ import (
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/utils"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/services"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type AuthenticationHandler struct {
@@ -70,37 +69,6 @@ func (h *AuthenticationHandler) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, utils.APIResponse(false, "Login successful", res))
-}
-
-// InviteUserHandler invites a new user
-func (h *AuthenticationHandler) InviteUserHandler(c *gin.Context) {
-	// 🔹 Get current user info from middleware
-	claims, exists := c.Get("userClaims")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized))
-		return
-	}
-	userClaims := claims.(*utils.JWTClaims)
-
-	var req models.InviteUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, utils.APIResponse(true, "Invalid request payload", nil, http.StatusBadRequest))
-		return
-	}
-
-	// 🔹 Call service
-	resp, err := h.authService.InviteUser(
-		uuid.MustParse(userClaims.UserID),
-		userClaims.Role,
-		uuid.MustParse(userClaims.OrganizationID),
-		req,
-	)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.APIResponse(true, err.Error(), nil, http.StatusBadRequest))
-		return
-	}
-
-	c.JSON(http.StatusOK, utils.APIResponse(false, "User invited successfully", resp))
 }
 
 // AcceptInviteHandler accepts an invitation

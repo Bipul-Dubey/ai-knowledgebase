@@ -6,7 +6,6 @@ COPY chats-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY chats-service/app ./app
-COPY chats-service/.env ./
 
 EXPOSE 50051
 

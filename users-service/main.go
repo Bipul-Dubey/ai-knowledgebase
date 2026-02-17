@@ -52,7 +52,7 @@ func main() {
 
 	routes.SetupRoutes(r, handlerManager, database)
 
-	port := os.Getenv("PORT")
+	port := os.Getenv("USER_PORT")
 	if port == "" {
 		port = "8080"
 	}

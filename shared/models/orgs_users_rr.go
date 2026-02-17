@@ -149,3 +149,17 @@ type DashboardStatsResponse struct {
 
 	Last30Days []DailyActivity `json:"last_30_days"`
 }
+
+type UserResponse struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Email          string     `json:"email"`
+	Role           string     `json:"role"`
+	Status         string     `json:"status"`
+	InvitedBy      *uuid.UUID `json:"invited_by,omitempty"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	ReactivatedAt  *time.Time `json:"reactivated_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}

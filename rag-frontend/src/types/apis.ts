@@ -5,6 +5,14 @@ export interface ApiResponse<T> {
   status: number;
 }
 
+//
+
+export type TUSER_ROLE = "owner" | "maintainer" | "member";
+export type TUSER_STATUS = "pending" | "active" | "suspended";
+
+export type TDOCUMENT_STATUS = "untrained" | "training" | "trained" | "failed";
+
+// ======================= INTERFACE | TYPE ========================
 export interface SignupPayload {
   organization_name: string;
   owner_name: string;
@@ -75,7 +83,7 @@ export interface IDocumentResource {
   file_name: string;
   type: string;
   url: string;
-  status: "untrained" | "training" | "trained" | "failed";
+  status: TDOCUMENT_STATUS;
   created_at: string;
   last_trained_at: string;
   file_size: number;
@@ -110,4 +118,27 @@ export interface DashboardStatsResponse {
 
 export interface TrainDocumentsPayload {
   document_ids: string[];
+}
+
+export interface IUser {
+  id: string;
+  name: string;
+  email: string;
+  role: TUSER_ROLE;
+  status: TUSER_STATUS;
+  created_at: string;
+}
+
+export interface InviteUserPayload {
+  email: string;
+  role: Exclude<TUSER_ROLE, "owner">;
+  name: string;
+}
+
+export interface AcceptInvitePayload {
+  token: string;
+  name: string;
+  email: string;
+  account_id: string;
+  password: string;
 }
