@@ -21,11 +21,14 @@ import {
   AlertDialogFooter,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { ViewDocumentButton } from "./ViewDocs";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function DocumentList() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
   const [trainingDocId, setTrainingDocId] = useState<string | null>(null);
+  const canMaintainDoc = !useAuth().isMember;
 
   const {
     data: documents = [],
@@ -159,62 +162,69 @@ export default function DocumentList() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
+                {/* view icon */}
+                <ViewDocumentButton documentId={doc.id} />
                 {/* Train Button */}
-                {doc.status === "training" ? (
-                  <Button size="sm">
-                    <Zap className="w-4 h-4 mr-1" />
-                    Training...
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant={doc.status === "untrained" ? "default" : "outline"}
-                    className={cn(
-                      doc.status === "failed" &&
-                        "border-red-500 text-red-600 hover:bg-red-50",
-                    )}
-                    onClick={() => onTrainClick(doc.id)}
-                  >
-                    <Zap className="w-4 h-4 mr-1" />
-                    {doc.status === "untrained" && "Train"}
-                    {doc.status === "trained" && "Retrain"}
-                    {doc.status === "failed" && "Retry"}
-                  </Button>
-                )}
+                {canMaintainDoc &&
+                  (doc.status === "training" ? (
+                    <Button size="sm" disabled>
+                      <Zap className="w-4 h-4 mr-1" />
+                      Training...
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant={
+                        doc.status === "untrained" ? "default" : "outline"
+                      }
+                      className={cn(
+                        doc.status === "failed" &&
+                          "border-red-500 text-red-600 hover:bg-red-50",
+                      )}
+                      onClick={() => onTrainClick(doc.id)}
+                    >
+                      <Zap className="w-4 h-4 mr-1" />
+                      {doc.status === "untrained" && "Train"}
+                      {doc.status === "trained" && "Retrain"}
+                      {doc.status === "failed" && "Retry"}
+                    </Button>
+                  ))}
 
                 {/* Delete */}
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {`Delete "${doc.file_name}"?`}
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => handleDelete(doc.id)}
-                        className="bg-destructive hover:bg-destructive/90"
+                {canMaintainDoc && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
                       >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {`Delete "${doc.file_name}"?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDelete(doc.id)}
+                          className="bg-destructive hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </div>
             </div>
 

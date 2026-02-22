@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PATHS } from "@/constants/paths";
 import { FullScreenLoader } from "../common/FullScreenLoader";
-import { useOrganizationDetails } from "@/hooks/orgs_user";
+import { useCurrentUser, useOrganizationDetails } from "@/hooks/orgs_user";
+import { useAuth } from "@/hooks/useAuth";
 
 export const ProtectedRoutes = ({
   children,
@@ -14,11 +15,13 @@ export const ProtectedRoutes = ({
   const router = useRouter();
   const hasRunRef = useRef(false);
   const [authDone, setAuthDone] = useState(false);
+  const { handleSetOrganization, handleSetUser } = useAuth();
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
   const { refetch } = useOrganizationDetails();
+  const { refetch: refetchUser } = useCurrentUser();
 
   useEffect(() => {
     if (hasRunRef.current) return;
@@ -33,8 +36,18 @@ export const ProtectedRoutes = ({
       try {
         const res = await refetch();
 
-        if (!res.data || res.data.error || !res.data.data) {
+        const orgData = res?.data?.data;
+
+        if (!res.data || res.data.error || !orgData) {
           throw new Error("Invalid session");
+        }
+        if (orgData) {
+          handleSetOrganization(orgData);
+          const resUser = await refetchUser();
+          handleSetUser(resUser?.data?.data ?? null);
+        } else {
+          handleSetOrganization(null);
+          handleSetUser(null);
         }
 
         setAuthDone(true);
@@ -45,7 +58,14 @@ export const ProtectedRoutes = ({
     };
 
     validate();
-  }, [token, refetch, router]);
+  }, [
+    token,
+    refetch,
+    router,
+    handleSetOrganization,
+    refetchUser,
+    handleSetUser,
+  ]);
 
   return (
     <>

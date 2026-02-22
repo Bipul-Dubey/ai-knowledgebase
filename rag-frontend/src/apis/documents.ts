@@ -2,6 +2,7 @@ import { ENV } from "@/constants/environments";
 import {
   ApiResponse,
   IDocumentResource,
+  IDownloadUrlResponse,
   TrainDocumentsPayload,
 } from "@/types/apis";
 import axiosInstance from "./middleware";
@@ -64,4 +65,14 @@ export const trainDocuments = async (payload: TrainDocumentsPayload) => {
   });
 
   return response.data;
+};
+
+export const getDocumentDownloadUrl = async (
+  documentId: string,
+): Promise<IDownloadUrlResponse> => {
+  const { data } = await axiosInstance.get(
+    `/documents/download/${documentId}`,
+    { baseURL: ENV.BASE_API_URL_CHATS },
+  );
+  return data.data;
 };

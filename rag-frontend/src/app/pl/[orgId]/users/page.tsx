@@ -1,16 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import InviteUserButton from "@/components/users/InviteUserButton";
 import UserRow from "@/components/users/UserRow";
 import UsersPagination from "@/components/users/UsersPagination";
 import { useUsers } from "@/hooks/orgs_user";
 import PageLoader from "@/components/common/PageLoader";
 import PageError from "@/components/common/PageError";
+import { useAuth } from "@/hooks/useAuth";
+import { IUser } from "@/types/apis";
+
+const sortUsers = (users: IUser[], currentUserId: string) => {
+  const getPriority = (user: IUser) => {
+    if (user.role === "owner") return 1;
+    if (user.id === currentUserId) return 2;
+    return 3;
+  };
+
+  return [...users].sort((a, b) => {
+    const priorityDiff = getPriority(a) - getPriority(b);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    return a.name.localeCompare(b.name);
+  });
+};
 
 export default function UsersPage() {
   const { data: users = [], isLoading, isError, refetch } = useUsers();
   const [page, setPage] = useState(1);
+  const { isMember, user } = useAuth();
+
+  // ✅ Memoized sorted users
+  const currentUserId = user?.id;
+
+  const sortedUsers = useMemo(() => {
+    if (!currentUserId) return users;
+    return sortUsers(users, currentUserId);
+  }, [users, currentUserId]);
 
   if (isLoading) return <PageLoader message="Loading users..." />;
 
@@ -27,12 +53,12 @@ export default function UsersPage() {
           </p>
         </div>
 
-        <InviteUserButton />
+        {!isMember && <InviteUserButton />}
       </div>
 
       <main className="px-6 py-8 space-y-4">
-        {users.map((user) => (
-          <UserRow key={user.id} user={user} />
+        {sortedUsers.map((u) => (
+          <UserRow key={u.id} user={u} />
         ))}
 
         <UsersPagination page={page} totalPages={3} onPageChange={setPage} />

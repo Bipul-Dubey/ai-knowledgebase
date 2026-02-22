@@ -34,6 +34,7 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 			{
 				org.GET("/details", h.OrganizationHandler.GetOrganizationDetails)
 				org.GET("/dashboard-stats", h.OrganizationHandler.GetDashboardStats)
+				org.DELETE("", h.OrganizationHandler.DeleteOrganization)
 			}
 
 			// USER
@@ -47,10 +48,17 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 				)
 
 				users.GET(
+					"/me",
+					h.UserHandler.GetCurrentUser,
+				)
+
+				users.GET(
 					"/:id",
 					middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer),
 					h.UserHandler.GetUserByID,
 				)
+
+				users.DELETE("/:id", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.DeleteUser)
 			}
 
 		}

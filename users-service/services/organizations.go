@@ -2,7 +2,6 @@ package services
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/models"
@@ -13,6 +12,7 @@ import (
 type OrganizationService interface {
 	GetOrganizationDetails(orgID string, role string) (*models.OrganizationDetailsResponse, error)
 	GetDashboardStats(orgID string, userID string) (*models.DashboardStatsResponse, error)
+	DeleteOrganization(orgID string) error
 }
 type organizationService struct {
 	db *gorm.DB
@@ -23,7 +23,6 @@ func NewOrganizationService(db *gorm.DB) OrganizationService {
 }
 
 func (s *organizationService) GetOrganizationDetails(orgID, role string) (*models.OrganizationDetailsResponse, error) {
-	fmt.Println("orgid:", orgID)
 	if orgID == "" {
 		return nil, errors.New("organization ID cannot be empty")
 	}
@@ -45,8 +44,9 @@ func (s *organizationService) GetOrganizationDetails(orgID, role string) (*model
 	response := &models.OrganizationDetailsResponse{
 		OrganizationID: org.ID.String(),
 		Name:           org.Name,
-		CreatedAt:      org.CreatedAt,
 		Status:         org.Status,
+		CreatedAt:      org.CreatedAt,
+		UpdatedAt:      org.UpdatedAt,
 	}
 
 	// Convert AccountID to int64 if stored as string
@@ -57,34 +57,59 @@ func (s *organizationService) GetOrganizationDetails(orgID, role string) (*model
 		}
 	}
 
-	// 👤 Fetch creator details if CreatedBy is not nil
+	// 👤 Fetch creator details
 	if org.CreatedBy != nil {
 		var creator models.User
 		if err := s.db.Select("id, name").
 			Where("id = ?", *org.CreatedBy).
 			First(&creator).Error; err == nil {
-			response.CreatedByUserID = creator.ID.String()
-			response.CreatedByUserName = creator.Name
+
+			id := creator.ID.String()
+			name := creator.Name
+
+			response.CreatedByUserID = &id
+			response.CreatedByUserName = &name
 		}
 	}
 
-	// 🧠 If not a member, attach additional details
+	// 🧠 If not member, attach additional details
 	if role != "member" {
+
+		// ✅ Total Users
 		var totalUsers int64
 		if err := s.db.Model(&models.User{}).
 			Where("organization_id = ?", org.ID).
 			Count(&totalUsers).Error; err != nil {
 			return nil, err
 		}
-		tu := int(totalUsers)
-		response.TotalUsers = &tu
+		response.TotalUsers = int(totalUsers)
 
-		// Get owner email
+		// ✅ Total Maintainers
+		var totalMaintainers int64
+		if err := s.db.Model(&models.User{}).
+			Where("organization_id = ? AND role = ?", org.ID, "maintainer").
+			Count(&totalMaintainers).Error; err != nil {
+			return nil, err
+		}
+		response.TotalMaintainers = int(totalMaintainers)
+
+		// ✅ Total Members
+		var totalMembers int64
+		if err := s.db.Model(&models.User{}).
+			Where("organization_id = ? AND role = ?", org.ID, "member").
+			Count(&totalMembers).Error; err != nil {
+			return nil, err
+		}
+		response.TotalMembers = int(totalMembers)
+
+		// ✅ Owner Email
 		var owner models.User
 		if err := s.db.Select("email").
 			Where("organization_id = ? AND role = ?", org.ID, "owner").
 			First(&owner).Error; err == nil && owner.Email != "" {
-			response.OwnerEmail = &owner.Email
+
+			email := owner.Email
+			response.OwnerEmail = &email
 		}
 	}
 
@@ -262,3 +287,56 @@ func (s *organizationService) GetDashboardStats(orgID string, userID string) (*m
 
 	return &stats, nil
 }
+
+func (s *organizationService) DeleteOrganization(orgID string) error {
+	if orgID == "" {
+		return errors.New("organization ID cannot be empty")
+	}
+
+	orgUUID, err := uuid.Parse(orgID)
+	if err != nil {
+		return errors.New("invalid organization ID")
+	}
+
+	result := s.db.Delete(&models.Organization{}, "id = ?", orgUUID)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("organization not found")
+	}
+
+	return nil
+}
+
+/*
+func (s *organizationService) DeleteOrganization(orgID string) error {
+	if orgID == "" {
+		return errors.New("organization ID cannot be empty")
+	}
+
+	orgUUID, err := uuid.Parse(orgID)
+	if err != nil {
+		return errors.New("invalid organization ID")
+	}
+
+	result := s.db.Model(&models.Organization{}).
+		Where("id = ?", orgUUID).
+		Updates(map[string]interface{}{
+			"is_deleted": true,
+			"deleted_at": time.Now(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("organization not found")
+	}
+
+	return nil
+}
+*/

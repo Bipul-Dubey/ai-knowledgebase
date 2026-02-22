@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import {
   Card,
@@ -22,16 +23,21 @@ import {
 import { Trash2, ShieldAlert } from "lucide-react";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
+import { useAuth } from "@/hooks/useAuth";
+import { useDeleteOrganization } from "@/hooks/orgs_user";
 
 export default function DangerZone() {
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const { organization } = useAuth();
+  const { mutate: deleteOrg, isPending } = useDeleteOrganization();
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    // Simulate delete API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsDeleting(false);
-    // Handle success/error
+  const isConfirmed = confirmText === "DELETE";
+
+  const handleDelete = () => {
+    if (!organization?.organization_id) return;
+    if (!isConfirmed) return;
+
+    deleteOrg();
   };
 
   return (
@@ -46,6 +52,7 @@ export default function DangerZone() {
           action cannot be undone.
         </CardDescription>
       </CardHeader>
+
       <CardContent>
         <AlertDialog>
           <AlertDialogTrigger asChild>
@@ -53,12 +60,13 @@ export default function DangerZone() {
               variant="destructive"
               size="lg"
               className="w-full font-semibold h-12 text-base"
-              disabled={isDeleting}
+              disabled={isPending}
             >
               <Trash2 className="w-5 h-5 mr-2" />
-              {isDeleting ? "Deleting..." : "Delete Organization"}
+              Delete Organization
             </Button>
           </AlertDialogTrigger>
+
           <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -67,26 +75,38 @@ export default function DangerZone() {
                 <span className="font-semibold text-destructive">
                   cannot be undone
                 </span>
-                . This will permanently delete your organization, all chats,
-                documents, and RAG data. Please type{" "}
-                <code className="bg-muted px-1 rounded font-mono">DELETE</code>{" "}
+                . This will permanently delete your organization, including all
+                chats, documents, and RAG data.
+                <br />
+                <br />
+                Please type{" "}
+                <code className="bg-muted px-1 rounded font-mono">
+                  DELETE
+                </code>{" "}
                 to confirm.
               </AlertDialogDescription>
             </AlertDialogHeader>
+
             <div className="space-y-2">
               <Label htmlFor="confirm-delete">Type DELETE to confirm</Label>
-              <Input id="confirm-delete" placeholder="DELETE" />
+              <Input
+                id="confirm-delete"
+                placeholder="DELETE"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                disabled={isPending}
+              />
             </div>
+
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeleting}>
-                Cancel
-              </AlertDialogCancel>
+              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+
               <AlertDialogAction
                 className="bg-destructive hover:bg-destructive/90"
-                disabled={isDeleting}
+                disabled={!isConfirmed || isPending}
                 onClick={handleDelete}
               >
-                Delete Organization
+                {isPending ? "Deleting..." : "Delete Organization"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

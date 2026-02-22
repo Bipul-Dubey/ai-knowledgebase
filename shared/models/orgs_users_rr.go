@@ -108,10 +108,13 @@ type OrganizationDetailsResponse struct {
 	Name              string    `json:"name"`
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
-	TotalUsers        *int      `json:"total_users,omitempty"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	TotalUsers        int       `json:"total_users"`
+	TotalMaintainers  int       `json:"total_maintainers"`
+	TotalMembers      int       `json:"total_members"`
 	OwnerEmail        *string   `json:"owner_email,omitempty"`
-	CreatedByUserID   string    `json:"created_by_user_id,omitempty"`
-	CreatedByUserName string    `json:"created_by_user_name,omitempty"`
+	CreatedByUserID   *string   `json:"created_by_user_id,omitempty"`
+	CreatedByUserName *string   `json:"created_by_user_name,omitempty"`
 }
 
 type AccountVerificationRequest struct {

@@ -14,5 +14,6 @@ export const PATHS = {
     // chats
     NEW_CHAT: (orgId: string) => `/pl/${orgId}/c`,
     CHAT: (orgId: string, chatId: string) => `/pl/${orgId}/c/${chatId}`,
+    PROFILE: (orgId: string) => `/pl/${orgId}/profile`,
   },
 };

@@ -6,10 +6,12 @@ import { UploadDocumentModal } from "@/components/documents/UploadDocument";
 import { useTrainDocuments } from "@/hooks/useDocumentResources";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 const DocumentsPage = () => {
   const { mutate: trainDocs, isPending: isTrainPending } = useTrainDocuments();
   const [showInfo, setShowInfo] = useState(false);
+  const canMaintainDoc = !useAuth().isMember;
 
   const onTrainClick = () => {
     handleTrain();
@@ -40,24 +42,26 @@ const DocumentsPage = () => {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full xl:w-auto">
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                <UploadDocumentModal />
-                <Button
-                  onClick={onTrainClick}
-                  disabled={isTrainPending}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  <Settings
-                    className={`h-4 w-4 ${
-                      isTrainPending ? "animate-spin" : ""
-                    }`}
-                  />
-                  {isTrainPending ? "Training..." : "Train Documents"}
-                </Button>
+            {canMaintainDoc && (
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full xl:w-auto">
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <UploadDocumentModal />
+                  <Button
+                    onClick={onTrainClick}
+                    disabled={isTrainPending}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    <Settings
+                      className={`h-4 w-4 ${
+                        isTrainPending ? "animate-spin" : ""
+                      }`}
+                    />
+                    {isTrainPending ? "Training..." : "Train Documents"}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
