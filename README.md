@@ -1,6 +1,6 @@
 # AI Knowledgebase
 
-This project uses **environment variables** to configure services (Go, Python, Docker).  
+This project uses **environment variables** to configure services (Go, Python, Docker, rabbitmq).  
 Keep secrets (like DB password) outside the repo by using local `.env` files or passing them inline.
 
 ### ==== Environment Variable ====
