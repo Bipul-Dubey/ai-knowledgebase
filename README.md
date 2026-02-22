@@ -1,6 +1,6 @@
 # AI Knowledgebase
 
-This project uses **environment variables** to configure services (Go, Python, Docker).  
+This project uses **environment variables** to configure services (Go, Python, Docker, rabbitmq).  
 Keep secrets (like DB password) outside the repo by using local `.env` files or passing them inline.
 
 ### ==== Environment Variable ====
@@ -44,6 +44,10 @@ RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 CHAT_PORT=50051
 # GO - USER SERVICE
 USER_PORT=8080
+
+# FRONTEND env
+NEXT_PUBLIC_API_BASE=http://localhost:8080/api/v1
+NEXT_PUBLIC_API_BASE_CHAT=http://localhost:50051/api/v1
 ```
 
 ### ==== Python to run on local ====
@@ -69,4 +73,15 @@ pip freeze > requirements.txt
 
 celery -A app.helpers.train_document worker --loglevel=info
 
+```
+
+```bash
+# see inside docker services
+docker exec -it users-service-1 sh
+
+# into database
+docker exec -it postgres-db psql -U postgres -d ai_knowledgebase
+
+# see logs
+docker compose logs -f frontend-service
 ```

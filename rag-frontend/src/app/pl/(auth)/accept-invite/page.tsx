@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Eye, EyeOff } from "lucide-react";
 import { useAcceptInvite } from "@/hooks/orgs_user";
 import { PATHS } from "@/constants/paths";
+import PageLoader from "@/components/common/PageLoader";
 
 interface FormState {
   name: string;
@@ -21,7 +22,15 @@ interface FormErrors {
   password?: string;
 }
 
-export default function AcceptInvite() {
+export default function Page() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AcceptInvite />
+    </Suspense>
+  );
+}
+
+function AcceptInvite() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
