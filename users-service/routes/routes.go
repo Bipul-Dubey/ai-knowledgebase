@@ -34,6 +34,7 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 			{
 				org.GET("/details", h.OrganizationHandler.GetOrganizationDetails)
 				org.GET("/dashboard-stats", h.OrganizationHandler.GetDashboardStats)
+				org.DELETE("", h.OrganizationHandler.DeleteOrganization)
 			}
 
 			// USER

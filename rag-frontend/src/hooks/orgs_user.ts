@@ -1,13 +1,16 @@
 import {
   acceptInvite,
+  deleteOrganization,
   fetchDashboardStats,
   fetchUsers,
   getCurrentUser,
   getOrganizationDetails,
   inviteUser,
 } from "@/apis/orgs_user";
+import { PATHS } from "@/constants/paths";
 import { ApiResponse, IUser } from "@/types/apis";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 
 export const useOrganizationDetails = () => {
   return useQuery({
@@ -62,5 +65,21 @@ export const useCurrentUser = () => {
     staleTime: 1000 * 60 * 5,
     retry: false,
     enabled: false,
+  });
+};
+
+export const useDeleteOrganization = () => {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: deleteOrganization,
+
+    onSuccess: async () => {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      localStorage.clear();
+      router.replace(PATHS.pl.REGISTER);
+    },
   });
 };

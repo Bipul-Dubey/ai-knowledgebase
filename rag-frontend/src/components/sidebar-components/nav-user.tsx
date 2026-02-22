@@ -1,11 +1,12 @@
 "use client";
 
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogOut, User } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -19,10 +20,14 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { getInitials } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { PATHS } from "@/constants/paths";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
-  const { logout, user } = useAuth();
+  const router = useRouter();
+  const { logout, user, organization } = useAuth();
+  const orgId = organization?.organization_id ?? "";
   const fallbackName = getInitials(user?.name ?? "");
 
   return (
@@ -68,6 +73,15 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
 
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => router.push(PATHS.pl.PROFILE(orgId))}
+              >
+                <User />
+                Profile
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout}>
               <LogOut />

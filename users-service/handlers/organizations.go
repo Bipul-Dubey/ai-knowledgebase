@@ -55,3 +55,40 @@ func (h *OrganizationHandler) GetDashboardStats(c *gin.Context) {
 
 	c.JSON(http.StatusOK, utils.APIResponse(false, "dashboard stats fetched", stats))
 }
+
+func (h *OrganizationHandler) DeleteOrganization(c *gin.Context) {
+	claimsRaw, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized))
+		return
+	}
+
+	claims := claimsRaw.(*utils.JWTClaims)
+	orgID := claims.OrganizationID
+
+	// 🔐 Only owner can delete organization
+	if claims.Role != "owner" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "only owner can delete organization",
+		})
+		return
+	}
+
+	if orgID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization ID required",
+		})
+		return
+	}
+
+	err := h.orgService.DeleteOrganization(orgID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.APIResponse(false, "organization deleted successfully", orgID))
+
+}

@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS organizations (
     status VARCHAR(20) DEFAULT 'pending',
     meta JSONB,
     created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMPTZ
 );
 
 -- ====================================================
