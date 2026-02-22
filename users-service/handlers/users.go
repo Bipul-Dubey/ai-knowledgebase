@@ -153,3 +153,46 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 		utils.APIResponse(false, "User fetched successfully", user),
 	)
 }
+
+func (h *UserHandler) DeleteUser(c *gin.Context) {
+	targetUserID := c.Param("id")
+
+	if targetUserID == "" {
+		c.JSON(
+			http.StatusBadRequest,
+			utils.APIResponse(true, "user id is required", nil, http.StatusBadRequest),
+		)
+		return
+	}
+
+	claimsRaw, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(
+			http.StatusUnauthorized,
+			utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized),
+		)
+		return
+	}
+
+	claims := claimsRaw.(*utils.JWTClaims)
+
+	err := h.userService.DeleteUser(
+		claims.OrganizationID,
+		claims.UserID,
+		claims.Role,
+		targetUserID,
+	)
+
+	if err != nil {
+		c.JSON(
+			http.StatusForbidden,
+			utils.APIResponse(true, err.Error(), nil, http.StatusForbidden),
+		)
+		return
+	}
+
+	c.JSON(
+		http.StatusOK,
+		utils.APIResponse(false, "user deleted successfully", nil, http.StatusOK),
+	)
+}

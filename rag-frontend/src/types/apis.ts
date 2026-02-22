@@ -134,7 +134,7 @@ export interface IUser {
   role: TUSER_ROLE;
   status: TUSER_STATUS;
   created_at: string;
-  profile?: string;
+  profile_image_url?: string;
 }
 
 export interface InviteUserPayload {

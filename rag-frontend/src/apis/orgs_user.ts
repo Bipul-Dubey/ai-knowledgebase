@@ -49,3 +49,19 @@ export const deleteOrganization = async () => {
   const { data } = await axiosInstance.delete(`/organizations`);
   return data;
 };
+
+export const deleteUser = async (userId: string) => {
+  const { data } = await axiosInstance.delete<ApiResponse<null>>(
+    `/users/${userId}`,
+  );
+
+  return data;
+};
+
+export const resendInvite = async (userId: string) => {
+  const { data } = await axiosInstance.post<ApiResponse<null>>(
+    `/users/${userId}/resend-invite`,
+  );
+
+  return data;
+};

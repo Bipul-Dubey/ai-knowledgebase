@@ -118,7 +118,7 @@ export function NavChats() {
                     disabled={isPending}
                   >
                     <Trash2 className="text-muted-foreground" />
-                    <span>Delete Project</span>
+                    <span>Delete Chat</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

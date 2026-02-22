@@ -53,11 +53,7 @@ export default function UserRow({ user }: { user: IUser }) {
         </span>
 
         {user.role === "owner" || id == user.id ? null : (
-          <UserActionsDropdown
-            status={user.status}
-            onResend={() => console.log("Resend")}
-            onRemove={() => console.log("Remove")}
-          />
+          <UserActionsDropdown user={user} />
         )}
       </div>
     </div>

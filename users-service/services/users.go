@@ -17,6 +17,7 @@ type UserService interface {
 	InviteUser(inviterID uuid.UUID, inviterRole string, orgID uuid.UUID, req models.InviteUserRequest) (*models.InviteUserResponse, error)
 	GetUsersByOrganization(orgID string) ([]models.UserResponse, error)
 	GetUserByID(orgID, userID string) (*models.UserResponse, error)
+	DeleteUser(orgID, requestingUserID, requestingRole, targetUserID string) error
 }
 
 type userService struct {
@@ -199,4 +200,74 @@ func (s *userService) GetUserByID(orgID, userID string) (*models.UserResponse, e
 	}
 
 	return &response, nil
+}
+
+func (s *userService) DeleteUser(
+	orgID string,
+	requestingUserID string,
+	requestingRole string,
+	targetUserID string,
+) error {
+
+	if targetUserID == "" {
+		return errors.New("target user id required")
+	}
+
+	targetUUID, err := uuid.Parse(targetUserID)
+	if err != nil {
+		return errors.New("invalid target user id")
+	}
+
+	var targetUser models.User
+	if err := s.db.
+		Where("id = ? AND organization_id = ?", targetUUID, orgID).
+		First(&targetUser).Error; err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return err
+	}
+
+	// ❌ Cannot delete yourself
+	if requestingUserID == targetUserID {
+		return errors.New("you cannot delete yourself")
+	}
+
+	// ❌ Owner cannot be deleted
+	if targetUser.Role == "owner" {
+		return errors.New("owner cannot be deleted")
+	}
+
+	// 🔐 RBAC Rules
+	switch requestingRole {
+
+	case "owner":
+		// Owner can delete maintainer & member
+		if targetUser.Role == "maintainer" || targetUser.Role == "member" {
+			break
+		}
+		return errors.New("not authorized to delete this user")
+
+	case "maintainer":
+		// Maintainer can only delete member
+		if targetUser.Role == "member" {
+			break
+		}
+		return errors.New("not authorized to delete this user")
+
+	default:
+		return errors.New("not authorized to delete users")
+	}
+
+	// ✅ Soft delete recommended
+	err = s.db.Model(&models.User{}).
+		Where("id = ?", targetUUID).
+		Updates(map[string]interface{}{
+			"is_deleted": true,
+			"deleted_at": time.Now(),
+			"deleted_by": requestingUserID,
+		}).Error
+
+	return err
 }

@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     role VARCHAR(20) NOT NULL,
     status VARCHAR(20) DEFAULT 'pending',
+    profile_image_url TEXT,
     invited_by UUID REFERENCES users(id),
     invite_token VARCHAR(255),
     expires_at TIMESTAMPTZ,
