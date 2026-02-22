@@ -1,8 +1,23 @@
 services:
+  frontend-service:
+    build:
+      context: ./rag-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
   users-service:
     build:
       context: .
       dockerfile: users-service/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_started
     ports:
       - "8080:8080"
     env_file:
@@ -20,6 +35,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      postgres:
+        condition: service_started
     ports:
       - "50051:50051"
     env_file:
@@ -43,22 +60,24 @@ services:
       timeout: 5s
       retries: 5
 
-  # frontend-service:
-  #   build:
-  #     context: ./rag-frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3005:3000"
-  #   environment:
-  #     - NODE_ENV=production
-  #     - PORT=3000
-  #     # If your frontend needs to talk to backend services, you can add URLs here
-  #     - NEXT_PUBLIC_USERS_SERVICE_URL=http://users-service:8080
-  #     - NEXT_PUBLIC_CHATS_SERVICE_URL=http://chats-service:50051
-  #   networks:
-  #     - microservices-network
-  #   restart: unless-stopped
+  postgres:
+    image: postgres:14
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: ai_knowledgebase
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    restart: unless-stopped
 
 networks:
   microservices-network:
     driver: bridge
+
+volumes:
+  postgres-data:

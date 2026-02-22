@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useVerifyAccount } from "@/hooks/auth";
 import { useSnackbar } from "notistack";
@@ -8,9 +8,18 @@ import axios from "axios";
 import { PATHS } from "@/constants/paths";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
+import PageLoader from "@/components/common/PageLoader";
 
 interface ApiErrorResponse {
   message?: string;
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <VerifyAccount />
+    </Suspense>
+  );
 }
 
 const VerifyAccount = () => {
@@ -104,5 +113,3 @@ const VerifyAccount = () => {
     </div>
   );
 };
-
-export default VerifyAccount;
