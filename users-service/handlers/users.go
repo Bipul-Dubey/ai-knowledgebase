@@ -126,3 +126,30 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 		),
 	)
 }
+
+func (h *UserHandler) GetCurrentUser(c *gin.Context) {
+	claimsRaw, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized,
+			utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized),
+		)
+		return
+	}
+
+	claims := claimsRaw.(*utils.JWTClaims)
+
+	orgID := claims.OrganizationID
+	userID := claims.UserID
+
+	user, err := h.userService.GetUserByID(orgID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound,
+			utils.APIResponse(true, err.Error(), nil, http.StatusNotFound),
+		)
+		return
+	}
+
+	c.JSON(http.StatusOK,
+		utils.APIResponse(false, "User fetched successfully", user),
+	)
+}

@@ -2,10 +2,11 @@ import {
   acceptInvite,
   fetchDashboardStats,
   fetchUsers,
+  getCurrentUser,
   getOrganizationDetails,
   inviteUser,
 } from "@/apis/orgs_user";
-import { IUser } from "@/types/apis";
+import { ApiResponse, IUser } from "@/types/apis";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useOrganizationDetails = () => {
@@ -51,5 +52,15 @@ export const useInviteUser = () => {
 export const useAcceptInvite = () => {
   return useMutation({
     mutationFn: acceptInvite,
+  });
+};
+
+export const useCurrentUser = () => {
+  return useQuery<ApiResponse<IUser>>({
+    queryKey: ["current-user"],
+    queryFn: getCurrentUser,
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+    enabled: false,
   });
 };

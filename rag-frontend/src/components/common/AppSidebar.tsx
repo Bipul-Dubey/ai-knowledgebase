@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavChats } from "@/components/sidebar-components/nav-chats";
-import { NavUser } from "@/components/nav-user";
+import { NavUser } from "@/components/sidebar-components/nav-user";
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +22,7 @@ import { useParams } from "next/navigation";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const params = useParams();
+
   const orgId = params.orgId as string;
   return (
     <Sidebar variant="inset" {...props}>

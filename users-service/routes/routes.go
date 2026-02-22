@@ -47,8 +47,13 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 				)
 
 				users.GET(
+					"/me",
+					h.UserHandler.GetCurrentUser,
+				)
+
+				users.GET(
 					"/:id",
-					middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer),
+					middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer, constants.RoleMaintainer),
 					h.UserHandler.GetUserByID,
 				)
 			}

@@ -49,16 +49,23 @@ export interface VerifyAccountData {
   organization_id: string;
 }
 
-export interface OrganizationDetails {
+export interface IOrganizationDetails {
   organization_id: string;
   account_id: number;
   name: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending";
+
   created_at: string;
+  updated_at: string;
+
   total_users: number;
-  owner_email: string;
-  created_by_user_id: string;
-  created_by_user_name: string;
+  total_maintainers: number;
+  total_members: number;
+
+  owner_email?: string;
+
+  created_by_user_id?: string;
+  created_by_user_name?: string;
 }
 
 export interface IConversation {
@@ -127,6 +134,7 @@ export interface IUser {
   role: TUSER_ROLE;
   status: TUSER_STATUS;
   created_at: string;
+  profile?: string;
 }
 
 export interface InviteUserPayload {
@@ -141,4 +149,9 @@ export interface AcceptInvitePayload {
   email: string;
   account_id: string;
   password: string;
+}
+
+export interface IDownloadUrlResponse {
+  url: string;
+  expires_at: number; // timestamp
 }

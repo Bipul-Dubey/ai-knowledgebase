@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { useInviteUser } from "@/hooks/orgs_user";
 import { InviteUserPayload } from "@/types/apis";
+import { useAuth } from "@/hooks/useAuth";
 
 interface FormErrors {
   name?: string;
@@ -28,6 +29,7 @@ interface FormErrors {
 }
 
 export default function InviteUserButton() {
+  const { isMaintainer } = useAuth();
   const [open, setOpen] = useState(false);
 
   const [email, setEmail] = useState("");
@@ -149,12 +151,14 @@ export default function InviteUserButton() {
               value={role}
               onValueChange={(val) => setRole(val as InviteUserPayload["role"])}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
 
               <SelectContent>
-                <SelectItem value="maintainer">Maintainer</SelectItem>
+                {isMaintainer ? null : (
+                  <SelectItem value="maintainer">Maintainer</SelectItem>
+                )}
                 <SelectItem value="member">Member</SelectItem>
               </SelectContent>
             </Select>

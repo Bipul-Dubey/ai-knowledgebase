@@ -1,9 +1,12 @@
+"use client";
 import DangerZone from "@/components/settings/DangerZone";
 import GeneralSettings from "@/components/settings/GeneralSettings";
 import ModelSettings from "@/components/settings/ModelSettings";
+import { useAuth } from "@/hooks/useAuth";
 import { Settings } from "lucide-react";
 
 const SettingsPage = () => {
+  const { isAdmin } = useAuth();
   return (
     <div className="flex flex-col bg-background">
       {/* Settings Header */}
@@ -16,7 +19,7 @@ const SettingsPage = () => {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
               <p className="text-sm text-muted-foreground">
-                {`Configure your organization's RAG platform `}• Acme Corp
+                {`Configure your organization's RAG platform `}
               </p>
             </div>
           </div>
@@ -24,13 +27,13 @@ const SettingsPage = () => {
       </div>
 
       <div className="flex flex-col space-y-6 py-6">
-        {/* general settings - organization/users */}
+        {/* general settings - organization */}
         <GeneralSettings />
         {/* Model setting - Add OPENAI API keys and test if it correct or not */}
         <ModelSettings />
 
         {/* delete account - if owner */}
-        <DangerZone />
+        {isAdmin && <DangerZone />}
       </div>
     </div>
   );

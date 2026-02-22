@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { PATHS } from "@/constants/paths";
 import { useParams } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
 const MENU_ITEMS = [
   {
@@ -44,12 +45,16 @@ const MENU_ITEMS = [
 
 export function NavMain() {
   const params: { orgId: string } = useParams();
+  const { isMember } = useAuth();
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
 
       <SidebarMenu>
-        {MENU_ITEMS.map((item) => (
+        {MENU_ITEMS?.filter(
+          (item) => !(isMember && ["Users", "Settings"].includes(item.title)),
+        ).map((item) => (
           <SidebarMenuItem key={item.title}>
             <SidebarMenuButton asChild tooltip={item.title}>
               <Link
