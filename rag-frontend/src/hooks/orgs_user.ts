@@ -8,6 +8,7 @@ import {
   getOrganizationDetails,
   inviteUser,
   resendInvite,
+  suspendUser,
 } from "@/apis/orgs_user";
 import { PATHS } from "@/constants/paths";
 import { ApiResponse, IUser } from "@/types/apis";
@@ -106,6 +107,30 @@ export const useDeleteUser = () => {
     onError: (error) => {
       enqueueSnackbar(
         error.response?.data?.message ?? "Failed to remove user",
+        { variant: "error" },
+      );
+    },
+  });
+};
+
+export const useSuspendUser = () => {
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  return useMutation<ApiResponse<null>, AxiosError<ApiResponse<null>>, string>({
+    mutationFn: suspendUser,
+
+    onSuccess: (data) => {
+      enqueueSnackbar(data?.message ?? "User suspend successfully", {
+        variant: "success",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+
+    onError: (error) => {
+      enqueueSnackbar(
+        error.response?.data?.message ?? "Failed to suspend user",
         { variant: "error" },
       );
     },

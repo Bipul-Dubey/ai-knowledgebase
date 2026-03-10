@@ -20,7 +20,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { IUser } from "@/types/apis";
-import { useDeleteUser, useResendInvite } from "@/hooks/orgs_user";
+import { useResendInvite, useSuspendUser } from "@/hooks/orgs_user";
 
 interface Props {
   user: IUser;
@@ -29,11 +29,11 @@ interface Props {
 export default function UserActionsDropdown({ user }: Props) {
   const [openConfirm, setOpenConfirm] = useState(false);
 
-  const { mutate: deleteUser, isPending: isDeleting } = useDeleteUser();
+  const { mutate: suspendUser, isPending: isDeleting } = useSuspendUser();
   const { mutate: resendInvite, isPending: isResending } = useResendInvite();
 
   const handleConfirmDelete = () => {
-    deleteUser(user.id, {
+    suspendUser(user.id, {
       onSuccess: () => setOpenConfirm(false),
     });
   };
@@ -64,7 +64,7 @@ export default function UserActionsDropdown({ user }: Props) {
             className="text-destructive focus:text-destructive"
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Remove User
+            Suspend User
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -73,12 +73,10 @@ export default function UserActionsDropdown({ user }: Props) {
       <AlertDialog open={openConfirm} onOpenChange={setOpenConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove User?</AlertDialogTitle>
+            <AlertDialogTitle>Suspend User?</AlertDialogTitle>
 
             <AlertDialogDescription>
-              This action cannot be undone.
-              <br />
-              Are you sure you want to remove{" "}
+              Are you sure you want to suspend{" "}
               <span className="font-semibold">{user.name}</span>?
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -91,7 +89,7 @@ export default function UserActionsDropdown({ user }: Props) {
               disabled={isDeleting}
               className="bg-destructive hover:bg-destructive/90"
             >
-              {isDeleting ? "Removing..." : "Remove User"}
+              {isDeleting ? "Suspending..." : "Suspend User"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

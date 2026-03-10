@@ -18,6 +18,7 @@ type UserService interface {
 	GetUsersByOrganization(orgID string) ([]models.UserResponse, error)
 	GetUserByID(orgID, userID string) (*models.UserResponse, error)
 	DeleteUser(orgID, requestingUserID, requestingRole, targetUserID string) error
+	SuspendUser(orgID, requestingUserID, requestingRole, targetUserID string) error
 }
 
 type userService struct {
@@ -202,13 +203,7 @@ func (s *userService) GetUserByID(orgID, userID string) (*models.UserResponse, e
 	return &response, nil
 }
 
-func (s *userService) DeleteUser(
-	orgID string,
-	requestingUserID string,
-	requestingRole string,
-	targetUserID string,
-) error {
-
+func (s *userService) DeleteUser(orgID, requestingUserID, requestingRole, targetUserID string) error {
 	if targetUserID == "" {
 		return errors.New("target user id required")
 	}
@@ -270,4 +265,69 @@ func (s *userService) DeleteUser(
 		}).Error
 
 	return err
+}
+
+func (s *userService) SuspendUser(orgID, requestingUserID, requestingRole, targetUserID string) error {
+	if targetUserID == "" {
+		return errors.New("target user id required")
+	}
+
+	targetUUID, err := uuid.Parse(targetUserID)
+	if err != nil {
+		return errors.New("invalid target user id")
+	}
+
+	if err != nil {
+		return errors.New("invalid requesting user id")
+	}
+
+	var targetUser models.User
+	if err := s.db.
+		Where("id = ? AND organization_id = ?", targetUUID, orgID).
+		First(&targetUser).Error; err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return err
+	}
+
+	// ❌ Cannot suspend yourself
+	if requestingUserID == targetUserID {
+		return errors.New("you cannot suspend yourself")
+	}
+
+	// ❌ Owner cannot be suspended
+	if targetUser.Role == "owner" {
+		return errors.New("owner cannot be suspended")
+	}
+
+	// 🔐 RBAC Rules
+	switch requestingRole {
+
+	case "owner":
+		if targetUser.Role != "maintainer" && targetUser.Role != "member" {
+			return errors.New("not authorized to suspend this user")
+		}
+
+	case "maintainer":
+		if targetUser.Role != "member" {
+			return errors.New("not authorized to suspend this user")
+		}
+
+	default:
+		return errors.New("not authorized to suspend users")
+	}
+
+	// ❌ Already suspended
+	if targetUser.Status == "suspended" {
+		return errors.New("user already suspended")
+	}
+
+	// ✅ Suspend
+	return s.db.Model(&models.User{}).
+		Where("id = ?", targetUUID).
+		Updates(map[string]interface{}{
+			"status": "suspended",
+		}).Error
 }

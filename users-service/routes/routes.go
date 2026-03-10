@@ -58,6 +58,7 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 					h.UserHandler.GetUserByID,
 				)
 
+				users.PATCH("/:id/suspend", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.SuspendUser)
 				users.DELETE("/:id", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.DeleteUser)
 			}
 

@@ -58,6 +58,14 @@ export const deleteUser = async (userId: string) => {
   return data;
 };
 
+export const suspendUser = async (userId: string) => {
+  const { data } = await axiosInstance.patch<ApiResponse<null>>(
+    `/users/${userId}/suspend`,
+  );
+
+  return data;
+};
+
 export const resendInvite = async (userId: string) => {
   const { data } = await axiosInstance.post<ApiResponse<null>>(
     `/users/${userId}/resend-invite`,
