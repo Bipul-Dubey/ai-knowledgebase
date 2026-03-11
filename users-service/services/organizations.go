@@ -165,7 +165,7 @@ func (s *organizationService) GetDashboardStats(orgID string, userID string) (*m
 		SELECT COUNT(*) 
 		FROM users
 		WHERE organization_id = ?
-		AND is_deleted = false
+		AND status = 'active'
 	`, orgUUID).Scan(&stats.ActiveUsers).Error; err != nil {
 		return nil, err
 	}

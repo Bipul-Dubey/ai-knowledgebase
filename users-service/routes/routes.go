@@ -20,14 +20,12 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 
 		api.POST("/forgot-password", h.AuthenticationHandler.ForgotPassword)
 		api.POST("/reset-password-email", h.AuthenticationHandler.ResetPasswordByEmail)
-		api.POST("/resend-verification", h.AuthenticationHandler.ResendVerificationEmail)
 
 		// new group with authentication
 		auth := api.Group("")
 		auth.Use(middleware.AuthMiddleware(db))
 		{
 			auth.POST("/reset-password", h.AuthenticationHandler.ResetPassword)
-			api.POST("users/resend-verification", h.AuthenticationHandler.ResendVerificationEmail)
 
 			// ORGANIZATION
 			org := auth.Group("/organization")

@@ -159,6 +159,8 @@ async def query_rag_openai_stream(
             FROM document_chunks dc
             JOIN documents d ON d.id = dc.document_id
             WHERE dc.organization_id = %s
+              AND d.deleted_at IS NULL
+              AND d.status = 'trained'
         """
         params = [org_id]
 

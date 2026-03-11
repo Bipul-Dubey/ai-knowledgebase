@@ -37,7 +37,7 @@ AWS_S3_BUCKET=
 
 
 # RabbitMQ
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
 
 # PYTHON - chats service
 
