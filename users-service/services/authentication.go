@@ -21,7 +21,6 @@ type AuthenticationService interface {
 	SignUp(ctx context.Context, req *models.SignupRequest) (*models.SignupResponse, error)
 	VerifyAccount(ctx context.Context, token string) (*models.VerifyAccountResponse, error)
 	Login(ctx context.Context, req *models.LoginRequest) (*models.LoginResponse, error)
-	ResendVerificationEmail(accountID string, email string) error
 	AcceptInvite(req models.AcceptInviteRequest) (*models.AcceptInviteResponse, error)
 	ForgotPassword(email, accountID string) (interface{}, error)
 	ResetPassword(claims any, oldPassword, newPassword string) (interface{}, error)
@@ -318,45 +317,6 @@ func (s *authenticationService) AcceptInvite(req models.AcceptInviteRequest) (*m
 		Status:         user.Status,
 		IsVerified:     true,
 	}, nil
-}
-
-func (s *authenticationService) ResendVerificationEmail(accountID string, email string) error {
-	var org models.Organization
-	if err := s.db.Where("account_id = ?", accountID).First(&org).Error; err != nil {
-		return errors.New("organization not found for this account ID")
-	}
-
-	var user models.User
-	if err := s.db.
-		Where("email = ? AND organization_id = ? AND status = ?", email, org.ID, "pending").
-		First(&user).Error; err != nil {
-		return errors.New("no pending user found with this email for the given account")
-	}
-
-	// Regenerate token if missing or expired
-	if user.InviteToken == nil || user.ExpiresAt == nil || time.Now().After(*user.ExpiresAt) {
-		token, _ := utils.GenerateSecureToken(32)
-		expiresAt := time.Now().Add(1 * time.Hour)
-		user.InviteToken = &token
-		user.ExpiresAt = &expiresAt
-		if err := s.db.Save(&user).Error; err != nil {
-			return err
-		}
-	}
-
-	frontendURL := os.Getenv("FRONTEND_BASE_URL")
-	verifyLink := fmt.Sprintf("%s/pl/verify-account?token=%s", frontendURL, *user.InviteToken)
-
-	emailBody := fmt.Sprintf(`
-		<h2>Account Verification</h2>
-		<p>Hello %s,</p>
-		<p>Please verify your account for organization <strong>%s</strong> by clicking below:</p>
-		<a href="%s" style="background:#4F46E5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Verify Account</a>
-		<p>This link will expire in 1 hour.</p>
-	`, user.Name, org.Name, verifyLink)
-
-	emailSender := utils.NewEmailSender()
-	return emailSender.SendEmail(user.Email, "Verify Your Account", emailBody)
 }
 
 // 🔹 Forgot Password

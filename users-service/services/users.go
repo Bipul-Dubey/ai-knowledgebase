@@ -15,6 +15,7 @@ import (
 
 type UserService interface {
 	InviteUser(inviterID uuid.UUID, inviterRole string, orgID uuid.UUID, req models.InviteUserRequest) (*models.InviteUserResponse, error)
+	ResendVerificationEmail(accountID string, email string) error
 	GetUsersByOrganization(orgID string) ([]models.UserResponse, error)
 	GetUserByID(orgID, userID string) (*models.UserResponse, error)
 	DeleteUser(orgID, requestingUserID, requestingRole, targetUserID string) error
@@ -119,6 +120,63 @@ func (s *userService) InviteUser(inviterID uuid.UUID, inviterRole string, orgID 
 		ExpiresAt:  newUser.ExpiresAt,
 		InviteLink: inviteLink,
 	}, nil
+}
+
+func (s *userService) ResendVerificationEmail(accountID string, email string) error {
+	var org models.Organization
+	if err := s.db.Where("account_id = ?", accountID).First(&org).Error; err != nil {
+		return errors.New("organization not found for this account ID")
+	}
+
+	var user models.User
+	if err := s.db.
+		Where("email = ? AND organization_id = ? AND status IN ?", email, org.ID, []string{"pending", "suspended"}).
+		First(&user).Error; err != nil {
+		return errors.New("no pending or suspended user found with this email for the given account")
+	}
+
+	// If suspended, reset back to pending so they can re-verify
+	wasSuspended := user.Status == "suspended"
+
+	// Always regenerate a fresh token
+	token, _ := utils.GenerateSecureToken(32)
+	expiresAt := time.Now().Add(1 * time.Hour)
+	user.InviteToken = &token
+	user.ExpiresAt = &expiresAt
+	if wasSuspended {
+		user.Status = "pending"
+	}
+	if err := s.db.Save(&user).Error; err != nil {
+		return err
+	}
+
+	frontendURL := os.Getenv("FRONTEND_BASE_URL")
+	verifyLink := fmt.Sprintf("%s/pl/verify-account?token=%s", frontendURL, token)
+
+	var emailSubject, emailBody string
+	if wasSuspended {
+		emailSubject = "Your account has been re-invited"
+		emailBody = fmt.Sprintf(`
+		<h2>You've been re-invited to %s</h2>
+		<p>Hello %s,</p>
+		<p>Your account was previously suspended. An admin has re-invited you to <strong>%s</strong>.</p>
+		<p>Click below to verify your account and set a new password:</p>
+		<a href="%s" style="background:#4F46E5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Accept Re-invite</a>
+		<p>This link will expire in 1 hour.</p>
+	`, org.Name, user.Name, org.Name, verifyLink)
+	} else {
+		emailSubject = "Verify Your Account"
+		emailBody = fmt.Sprintf(`
+		<h2>Account Verification</h2>
+		<p>Hello %s,</p>
+		<p>Please verify your account for organization <strong>%s</strong> by clicking below:</p>
+		<a href="%s" style="background:#4F46E5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Verify Account</a>
+		<p>This link will expire in 1 hour.</p>
+	`, user.Name, org.Name, verifyLink)
+	}
+
+	emailSender := utils.NewEmailSender()
+	return emailSender.SendEmail(user.Email, emailSubject, emailBody)
 }
 
 // ==============================

@@ -50,6 +50,21 @@ func (h *UserHandler) InviteUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, utils.APIResponse(false, "User invited successfully", resp))
 }
 
+func (h *UserHandler) ResendVerificationEmail(c *gin.Context) {
+	var req models.AccountVerificationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.APIResponse(true, "Invalid request payload", nil, http.StatusBadRequest))
+		return
+	}
+
+	if err := h.userService.ResendVerificationEmail(req.AccountID, req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, utils.APIResponse(true, err.Error(), nil, http.StatusBadRequest))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.APIResponse(false, "Verification email resent successfully", nil, http.StatusOK))
+}
+
 func (h *UserHandler) GetUsersByOrganization(c *gin.Context) {
 	claimsRaw, exists := c.Get("userClaims")
 	if !exists {
