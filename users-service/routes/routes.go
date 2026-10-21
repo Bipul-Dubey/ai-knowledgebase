@@ -53,12 +53,21 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 				)
 
 				users.GET(
+					"/stats",
+					middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer),
+					h.UserHandler.GetUserStats,
+				)
+
+				users.GET(
 					"/:id",
 					middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer),
 					h.UserHandler.GetUserByID,
 				)
 
 				users.PATCH("/:id/suspend", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.SuspendUser)
+				// Owner only: changing a role grants privileges, so it sits a
+				// level above suspension, which maintainers may also do.
+				users.PATCH("/:id/role", middleware.RoleAuthorization(constants.RoleOwner), h.UserHandler.UpdateUserRole)
 				users.DELETE("/:id", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.DeleteUser)
 			}
 

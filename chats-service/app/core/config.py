@@ -112,6 +112,14 @@ class Settings:
     AWS_REGION = os.getenv("AWS_REGION","ap-south-1")
     AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
 
+    # Upload limits, per organization. Mirrored in
+    # rag-frontend/src/constants/uploads.ts -- change both together.
+    MAX_DOCUMENTS_PER_ORG = int(os.getenv("MAX_DOCUMENTS_PER_ORG", "10"))
+    MAX_ORG_STORAGE_BYTES = int(
+        os.getenv("MAX_ORG_STORAGE_BYTES", str(100 * 1024 * 1024))
+    )
+    MAX_FILE_SIZE_BYTES = int(os.getenv("MAX_FILE_SIZE_BYTES", str(10 * 1024 * 1024)))
+
     # Dev blob storage (see app/helpers/storage.py). Defaults work as-is;
     # LOCAL_STORAGE_DIR is the container path bind-mounted to ./local_data.
     LOCAL_STORAGE_DIR = os.getenv("LOCAL_STORAGE_DIR", "/app/local_data/documents")

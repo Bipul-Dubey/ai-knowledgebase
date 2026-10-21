@@ -1,6 +1,10 @@
 import {
   AcceptInvitePayload,
   ApiResponse,
+  PaginatedUsers,
+  UpdateUserRolePayload,
+  UserListParams,
+  UserStats,
   DashboardStatsResponse,
   InviteUserPayload,
   IUser,
@@ -22,10 +26,33 @@ export async function fetchDashboardStats(): Promise<DashboardStatsResponse> {
   return response.data.data;
 }
 
-export const fetchUsers = async (): Promise<IUser[]> => {
-  const response = await axiosInstance.get<ApiResponse<IUser[]>>("/users");
+export const fetchUsers = async ({
+  page,
+  limit,
+  search,
+}: UserListParams): Promise<PaginatedUsers> => {
+  const response = await axiosInstance.get<ApiResponse<PaginatedUsers>>(
+    "/users",
+    { params: { page, limit, ...(search ? { search } : {}) } },
+  );
 
-  return response.data.data ?? [];
+  return (
+    response.data.data ?? {
+      users: [],
+      total: 0,
+      page,
+      limit,
+      total_pages: 0,
+    }
+  );
+};
+
+export const fetchUserStats = async (): Promise<UserStats | null> => {
+  const response = await axiosInstance.get<ApiResponse<UserStats>>(
+    "/users/stats",
+  );
+
+  return response.data.data ?? null;
 };
 
 export const inviteUser = async (payload: InviteUserPayload) => {
@@ -53,6 +80,18 @@ export const deleteOrganization = async () => {
 export const deleteUser = async (userId: string) => {
   const { data } = await axiosInstance.delete<ApiResponse<null>>(
     `/users/${userId}`,
+  );
+
+  return data;
+};
+
+export const updateUserRole = async ({
+  userId,
+  role,
+}: UpdateUserRolePayload) => {
+  const { data } = await axiosInstance.patch<ApiResponse<null>>(
+    `/users/${userId}/role`,
+    { role },
   );
 
   return data;

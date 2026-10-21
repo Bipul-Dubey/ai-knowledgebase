@@ -21,6 +21,9 @@ client = AsyncOpenAI(
 # Base RAG Configuration
 MAX_CONTEXT_MESSAGES = 10
 
+# Must stay byte-identical to constants.NotFoundAnswer in
+# shared/constants/rag.go: the dashboard counts assistant messages
+# equal to this string to derive the answer rate.
 NOT_FOUND = "Not found in the provided documents."
 
 # HNSW search tuning, applied per transaction.

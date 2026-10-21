@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/models"
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/utils"
@@ -82,7 +83,16 @@ func (h *UserHandler) GetUsersByOrganization(c *gin.Context) {
 
 	orgID := claims.OrganizationID
 
-	users, err := h.userService.GetUsersByOrganization(orgID)
+	// Invalid or absent values fall back to the service defaults rather
+	// than erroring: a bad ?page= should not break the page.
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	result, err := h.userService.GetUsersByOrganization(orgID, models.UserListQuery{
+		Page:   page,
+		Limit:  limit,
+		Search: c.Query("search"),
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			utils.APIResponse(
@@ -99,8 +109,29 @@ func (h *UserHandler) GetUsersByOrganization(c *gin.Context) {
 		utils.APIResponse(
 			false,
 			"Users fetched successfully",
-			users,
+			result,
 		),
+	)
+}
+
+func (h *UserHandler) GetUserStats(c *gin.Context) {
+	claimsRaw, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized))
+		return
+	}
+	claims := claimsRaw.(*utils.JWTClaims)
+
+	stats, err := h.userService.GetUserStats(claims.OrganizationID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError,
+			utils.APIResponse(true, err.Error(), nil, http.StatusInternalServerError),
+		)
+		return
+	}
+
+	c.JSON(http.StatusOK,
+		utils.APIResponse(false, "User stats fetched successfully", stats),
 	)
 }
 
@@ -216,6 +247,59 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	c.JSON(
 		http.StatusOK,
 		utils.APIResponse(false, "user deleted successfully", nil, http.StatusOK),
+	)
+}
+
+func (h *UserHandler) UpdateUserRole(c *gin.Context) {
+	targetUserID := c.Param("id")
+
+	if targetUserID == "" {
+		c.JSON(
+			http.StatusBadRequest,
+			utils.APIResponse(true, "user id is required", nil, http.StatusBadRequest),
+		)
+		return
+	}
+
+	var req models.UpdateUserRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(
+			http.StatusBadRequest,
+			utils.APIResponse(true, "role must be maintainer or member", nil, http.StatusBadRequest),
+		)
+		return
+	}
+
+	claimsRaw, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(
+			http.StatusUnauthorized,
+			utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized),
+		)
+		return
+	}
+
+	claims := claimsRaw.(*utils.JWTClaims)
+
+	err := h.userService.UpdateUserRole(
+		claims.OrganizationID,
+		claims.UserID,
+		claims.Role,
+		targetUserID,
+		req.Role,
+	)
+
+	if err != nil {
+		c.JSON(
+			http.StatusForbidden,
+			utils.APIResponse(true, err.Error(), nil, http.StatusForbidden),
+		)
+		return
+	}
+
+	c.JSON(
+		http.StatusOK,
+		utils.APIResponse(false, "User role updated successfully", nil, http.StatusOK),
 	)
 }
 

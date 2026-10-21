@@ -4,14 +4,22 @@ import {
   deleteUser,
   fetchDashboardStats,
   fetchUsers,
+  fetchUserStats,
   getCurrentUser,
   getOrganizationDetails,
   inviteUser,
   resendInvite,
   suspendUser,
+  updateUserRole,
 } from "@/apis/orgs_user";
 import { PATHS } from "@/constants/paths";
-import { ApiResponse, IUser } from "@/types/apis";
+import {
+  ApiResponse,
+  IUser,
+  PaginatedUsers,
+  UpdateUserRolePayload,
+  UserListParams,
+} from "@/types/apis";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import { useRouter } from "next/navigation";
@@ -38,10 +46,21 @@ export const useDashboardStats = () => {
   });
 };
 
-export const useUsers = () => {
-  return useQuery<IUser[]>({
-    queryKey: ["users"],
-    queryFn: fetchUsers,
+export const useUsers = (params: UserListParams) => {
+  return useQuery<PaginatedUsers>({
+    queryKey: ["users", params],
+    queryFn: () => fetchUsers(params),
+    staleTime: 1000 * 60 * 2,
+    // Keep the current page on screen while the next one loads, so paging
+    // does not flash an empty list.
+    placeholderData: (previous) => previous,
+  });
+};
+
+export const useUserStats = () => {
+  return useQuery({
+    queryKey: ["users", "stats"],
+    queryFn: fetchUserStats,
     staleTime: 1000 * 60 * 2,
   });
 };
@@ -109,6 +128,36 @@ export const useDeleteUser = () => {
         error.response?.data?.message ?? "Failed to remove user",
         { variant: "error" },
       );
+    },
+  });
+};
+
+export const useUpdateUserRole = () => {
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  return useMutation<
+    ApiResponse<null>,
+    AxiosError<ApiResponse<null>>,
+    UpdateUserRolePayload
+  >({
+    mutationFn: updateUserRole,
+
+    onSuccess: (data) => {
+      // The change revokes their existing session, so say so rather than
+      // leaving them to discover it as a surprise logout.
+      enqueueSnackbar(
+        data?.message ?? "Role updated. They will need to sign in again.",
+        { variant: "success" },
+      );
+
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+
+    onError: (error) => {
+      enqueueSnackbar(error.response?.data?.message ?? "Failed to update role", {
+        variant: "error",
+      });
     },
   });
 };

@@ -139,6 +139,21 @@ _EXTRACTORS = {
 _LEGACY = {".doc": ".docx", ".xls": ".xlsx"}
 
 
+def supported_extensions() -> frozenset[str]:
+    """Extensions this module can extract text from.
+
+    The upload endpoint validates against this, so a file can never be
+    accepted that training would later reject -- which is what happened
+    while uploads allowed .doc and .xls.
+    """
+    return frozenset(_EXTRACTORS)
+
+
+def legacy_replacement(ext: str) -> str | None:
+    """The modern format to suggest for a legacy extension, if any."""
+    return _LEGACY.get(ext.lower())
+
+
 _DOT_LEADER = re.compile(r"\.{3,}")
 
 

@@ -1,30 +1,55 @@
 import {
   deleteDocument,
   fetchDocumentResources,
+  fetchDocumentStats,
   getDocumentDownloadUrl,
   trainDocuments,
-  uploadDocument,
+  uploadDocuments,
 } from "@/apis/documents";
+import { DocumentListParams } from "@/types/apis";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-export const useDocumentResources = () => {
+export const useDocumentResources = (params: DocumentListParams) => {
   return useQuery({
-    queryKey: ["documents", "resources"],
-    queryFn: fetchDocumentResources,
+    queryKey: ["documents", "resources", params],
+    queryFn: () => fetchDocumentResources(params),
     staleTime: 1000 * 60 * 5,
+    // Keep the current page visible while the next loads.
+    placeholderData: (previous) => previous,
+    // Training finishes in a Celery worker, so status changes with nothing
+    // to tell the page. Poll only while something on this page is actually
+    // training, then stop -- an idle list should not generate traffic.
+    refetchInterval: (query) =>
+      query.state.data?.documents?.some((doc) => doc.status === "training")
+        ? 3000
+        : false,
   });
 };
 
-export const useUploadDocument = () => {
+/** Org-wide usage. Separate from the list because the list is one page:
+ *  summing it would under-count and let an org exceed its quota. */
+export const useDocumentStats = () => {
+  return useQuery({
+    queryKey: ["documents", "stats"],
+    queryFn: fetchDocumentStats,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: (query) =>
+      query.state.data?.training ? 3000 : false,
+  });
+};
+
+export const useUploadDocuments = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: uploadDocument,
+    mutationFn: uploadDocuments,
 
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["documents", "resources"],
-      });
+      // Broader prefix: covers every page of the list and the stats that
+      // drive the quota display.
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      // Storage and document counts feed the dashboard too.
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
     },
   });
 };
@@ -36,9 +61,9 @@ export const useDeleteDocument = () => {
     mutationFn: (documentId: string) => deleteDocument(documentId),
 
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["documents", "resources"],
-      });
+      // Broader prefix: covers every page of the list and the stats that
+      // drive the quota display.
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
 
       queryClient.invalidateQueries({
         queryKey: ["dashboard-stats"],
@@ -55,9 +80,9 @@ export const useTrainDocuments = () => {
       trainDocuments({ document_ids: documentIds }),
 
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["documents", "resources"],
-      });
+      // Broader prefix: covers every page of the list and the stats that
+      // drive the quota display.
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
 
       queryClient.invalidateQueries({
         queryKey: ["dashboard-stats"],

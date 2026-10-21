@@ -1,38 +1,57 @@
 import { ENV } from "@/constants/environments";
 import {
   ApiResponse,
+  DocumentListParams,
+  DocumentStats,
   IDocumentResource,
+  PaginatedDocuments,
   IDownloadUrlResponse,
   TrainDocumentsPayload,
+  UploadResult,
 } from "@/types/apis";
 import axiosInstance from "./middleware";
 
-export const fetchDocumentResources = async (): Promise<
-  IDocumentResource[]
-> => {
-  const response = await axiosInstance.get<ApiResponse<IDocumentResource[]>>(
+export const fetchDocumentResources = async ({
+  page,
+  limit,
+  search,
+}: DocumentListParams): Promise<PaginatedDocuments> => {
+  const response = await axiosInstance.get<ApiResponse<PaginatedDocuments>>(
     "/documents/resources",
     {
       baseURL: ENV.BASE_API_URL_CHATS,
+      params: { page, limit, ...(search ? { search } : {}) },
     },
   );
 
-  return response.data.data ?? [];
+  return (
+    response.data.data ?? {
+      documents: [],
+      total: 0,
+      page,
+      limit,
+      total_pages: 0,
+    }
+  );
 };
 
-interface UploadPayload {
-  file: File;
-  title: string;
-}
+export const fetchDocumentStats = async (): Promise<DocumentStats | null> => {
+  const response = await axiosInstance.get<ApiResponse<DocumentStats>>(
+    "/documents/stats",
+    { baseURL: ENV.BASE_API_URL_CHATS },
+  );
 
-export const uploadDocument = async (
-  payload: UploadPayload,
-): Promise<IDocumentResource> => {
+  return response.data.data ?? null;
+};
+
+export const uploadDocuments = async (
+  files: File[],
+): Promise<UploadResult> => {
   const formData = new FormData();
-  formData.append("file", payload.file);
-  formData.append("title", payload.title);
+  // Repeated "files" entries, which is what List[UploadFile] expects.
+  files.forEach((file) => formData.append("files", file));
 
-  const response = await axiosInstance.post<ApiResponse<IDocumentResource>>(
+  const response = await axiosInstance.post<ApiResponse<UploadResult>>(
     "/documents/upload",
     formData,
     {
@@ -44,7 +63,7 @@ export const uploadDocument = async (
   );
 
   if (!response.data.data) {
-    throw new Error("Upload failed");
+    throw new Error(response.data.message || "Upload failed");
   }
 
   return response.data.data;

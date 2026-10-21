@@ -1,7 +1,11 @@
 "use client";
 
+import DocumentHealth from "@/components/analytics/DocumentHealth";
+import QualityCards from "@/components/analytics/QualityCards";
 import StatsCards from "@/components/analytics/StatsCards";
+import TopDocuments from "@/components/analytics/TopDocuments";
 import { TrendChart } from "@/components/analytics/TrendChart";
+import UnansweredQuestions from "@/components/analytics/UnansweredQuestions";
 import { useDashboardStats } from "@/hooks/orgs_user";
 import { Building2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -82,8 +86,20 @@ const AnalyticsPage = () => {
 
       {/* Main Content */}
       <main className="flex-1 px-6 py-10 space-y-8">
+        {/* Volume */}
         <StatsCards />
+
+        {/* Quality and capacity */}
+        <QualityCards />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <DocumentHealth />
+          <TopDocuments />
+        </div>
+
         <TrendChart />
+
+        <UnansweredQuestions />
       </main>
     </div>
   );

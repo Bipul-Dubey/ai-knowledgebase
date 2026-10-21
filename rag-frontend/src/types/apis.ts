@@ -135,12 +135,123 @@ export interface DashboardStatsResponse {
   // Chats
   total_chats: number;
   active_chats: number;
-  // Messages & Cost
+  // Messages
   total_queries: number;
   total_messages: number;
-  total_cost: number;
+
+  // Index health: only 'trained' documents are actually searchable.
+  documents_trained: number;
+  documents_training: number;
+  documents_untrained: number;
+  documents_failed: number;
+
+  // Knowledge base size
+  total_chunks: number;
+  indexed_pages: number;
+  storage_bytes: number;
+
+  // Answer quality
+  answered_queries: number;
+  unanswered_queries: number;
+  answer_rate: number;
+
+  // Engagement, as distinct from seats
+  active_users_30d: number;
+
+  // Load (self-hosted inference has no per-token cost)
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+
+  unanswered_questions: UnansweredQuestion[];
+  top_documents: DocumentUsage[];
 
   last_30_days: DailyActivity[];
+}
+
+export interface UnansweredQuestion {
+  question: string;
+  asked_at: string;
+}
+
+export interface DocumentUsage {
+  title: string;
+  citations: number;
+}
+
+export interface UserListParams {
+  page: number;
+  limit: number;
+  search?: string;
+}
+
+export interface PaginatedUsers {
+  users: IUser[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface UserStats {
+  total_users: number;
+
+  owners: number;
+  maintainers: number;
+  members: number;
+
+  active: number;
+  pending: number;
+  suspended: number;
+
+  active_users_7d: number;
+
+  total_queries: number;
+  avg_queries_per_user: number;
+}
+
+export interface UpdateUserRolePayload {
+  userId: string;
+  role: Exclude<TUSER_ROLE, "owner">;
+}
+
+export interface DocumentListParams {
+  page: number;
+  limit: number;
+  search?: string;
+}
+
+export interface PaginatedDocuments {
+  documents: IDocumentResource[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+/** Org-wide usage plus the limits it is measured against, served by the API
+ *  so the numbers live in one place rather than being mirrored client-side. */
+export interface DocumentStats {
+  used_count: number;
+  used_bytes: number;
+
+  trained: number;
+  training: number;
+  untrained: number;
+  failed: number;
+
+  max_documents: number;
+  max_storage_bytes: number;
+  max_file_size_bytes: number;
+}
+
+export interface RejectedUpload {
+  file_name: string;
+  reason: string;
+}
+
+export interface UploadResult {
+  uploaded: IDocumentResource[];
+  rejected: RejectedUpload[];
 }
 
 export interface TrainDocumentsPayload {

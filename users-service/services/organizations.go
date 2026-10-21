@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/Bipul-Dubey/ai-knowledgebase/shared/constants"
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -234,13 +235,144 @@ func (s *organizationService) GetDashboardStats(orgID string, userID string) (*m
 	}
 
 	// ------------------------------------------------
-	// TOTAL COST
+	// INDEX HEALTH
+	// ------------------------------------------------
+	// Only 'trained' documents are searchable, so a plain document count can
+	// hide a failed index.
+	if err := s.db.Raw(`
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'trained'),
+			COUNT(*) FILTER (WHERE status = 'training'),
+			COUNT(*) FILTER (WHERE status = 'untrained'),
+			COUNT(*) FILTER (WHERE status = 'failed')
+		FROM documents
+		WHERE organization_id = ?
+		AND deleted_at IS NULL
+	`, orgUUID).Row().Scan(
+		&stats.DocumentsTrained,
+		&stats.DocumentsTraining,
+		&stats.DocumentsUntrained,
+		&stats.DocumentsFailed,
+	); err != nil {
+		return nil, err
+	}
+
+	// ------------------------------------------------
+	// KNOWLEDGE BASE SIZE
 	// ------------------------------------------------
 	if err := s.db.Raw(`
-		SELECT COALESCE(SUM(total_cost), 0)
+		SELECT
+			COUNT(*),
+			COUNT(DISTINCT (dc.document_id, dc.page))
+		FROM document_chunks dc
+		JOIN documents d ON d.id = dc.document_id
+		WHERE d.organization_id = ?
+		AND d.deleted_at IS NULL
+	`, orgUUID).Row().Scan(&stats.TotalChunks, &stats.IndexedPages); err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Raw(`
+		SELECT COALESCE(SUM(file_size), 0)
+		FROM documents
+		WHERE organization_id = ?
+		AND deleted_at IS NULL
+	`, orgUUID).Scan(&stats.StorageBytes).Error; err != nil {
+		return nil, err
+	}
+
+	// ------------------------------------------------
+	// ANSWER QUALITY
+	// ------------------------------------------------
+	// The pipeline writes one fixed sentence when the corpus cannot answer,
+	// so counting it gives the answer rate with no extra instrumentation.
+	if err := s.db.Raw(`
+		SELECT
+			COUNT(*) FILTER (WHERE content <> ?),
+			COUNT(*) FILTER (WHERE content = ?)
+		FROM messages
+		WHERE organization_id = ?
+		AND role = 'assistant'
+	`, constants.NotFoundAnswer, constants.NotFoundAnswer, orgUUID).
+		Row().Scan(&stats.AnsweredQueries, &stats.UnansweredQueries); err != nil {
+		return nil, err
+	}
+
+	if total := stats.AnsweredQueries + stats.UnansweredQueries; total > 0 {
+		stats.AnswerRate = float64(stats.AnsweredQueries) / float64(total) * 100
+	}
+
+	// ------------------------------------------------
+	// ENGAGEMENT
+	// ------------------------------------------------
+	// People who actually asked something, as opposed to people with a seat.
+	if err := s.db.Raw(`
+		SELECT COUNT(DISTINCT sender_user_id)
+		FROM messages
+		WHERE organization_id = ?
+		AND role = 'user'
+		AND sender_user_id IS NOT NULL
+		AND created_at >= CURRENT_DATE - INTERVAL '29 days'
+	`, orgUUID).Scan(&stats.ActiveUsers30d).Error; err != nil {
+		return nil, err
+	}
+
+	// ------------------------------------------------
+	// TOKEN THROUGHPUT
+	// ------------------------------------------------
+	if err := s.db.Raw(`
+		SELECT
+			COALESCE(SUM(total_prompt_tokens), 0),
+			COALESCE(SUM(total_completion_tokens), 0)
 		FROM token_usage
 		WHERE organization_id = ?
-	`, orgUUID).Scan(&stats.TotalCost).Error; err != nil {
+	`, orgUUID).Row().Scan(
+		&stats.TotalPromptTokens,
+		&stats.TotalCompletionTokens,
+	); err != nil {
+		return nil, err
+	}
+
+	// ------------------------------------------------
+	// UNANSWERED QUESTIONS
+	// ------------------------------------------------
+	// Pair each refusal with the question that produced it: the most recent
+	// user message in the same chat before it.
+	if err := s.db.Raw(`
+		SELECT q.content AS question, a.created_at AS asked_at
+		FROM messages a
+		JOIN LATERAL (
+			SELECT u.content
+			FROM messages u
+			WHERE u.chat_id = a.chat_id
+			AND u.role = 'user'
+			AND u.created_at < a.created_at
+			ORDER BY u.created_at DESC
+			LIMIT 1
+		) q ON TRUE
+		WHERE a.organization_id = ?
+		AND a.role = 'assistant'
+		AND a.content = ?
+		ORDER BY a.created_at DESC
+		LIMIT 10
+	`, orgUUID, constants.NotFoundAnswer).Scan(&stats.UnansweredQuestions).Error; err != nil {
+		return nil, err
+	}
+
+	// ------------------------------------------------
+	// MOST CITED DOCUMENTS
+	// ------------------------------------------------
+	// Read from messages.sources, so this only covers answers produced after
+	// that column was added; older rows hold NULL and contribute nothing.
+	if err := s.db.Raw(`
+		SELECT s->>'title' AS title, COUNT(*) AS citations
+		FROM messages m, jsonb_array_elements(m.sources) s
+		WHERE m.organization_id = ?
+		AND m.sources IS NOT NULL
+		GROUP BY 1
+		ORDER BY citations DESC, title ASC
+		LIMIT 5
+	`, orgUUID).Scan(&stats.TopDocuments).Error; err != nil {
 		return nil, err
 	}
 

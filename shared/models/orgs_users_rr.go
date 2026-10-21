@@ -117,6 +117,50 @@ type OrganizationDetailsResponse struct {
 	CreatedByUserName *string   `json:"created_by_user_name,omitempty"`
 }
 
+// UserListQuery is the paging and filtering the users list accepts.
+// Search runs in the database alongside paging: filtering only the current
+// page client-side would silently hide matches on other pages.
+type UserListQuery struct {
+	Page   int
+	Limit  int
+	Search string
+}
+
+type PaginatedUsersResponse struct {
+	Users      []UserResponse `json:"users"`
+	Total      int64          `json:"total"`
+	Page       int            `json:"page"`
+	Limit      int            `json:"limit"`
+	TotalPages int            `json:"total_pages"`
+}
+
+// UserStatsResponse summarises membership and how much it is actually used.
+type UserStatsResponse struct {
+	TotalUsers int64 `json:"total_users"`
+
+	Owners      int64 `json:"owners"`
+	Maintainers int64 `json:"maintainers"`
+	Members     int64 `json:"members"`
+
+	Active    int64 `json:"active"`
+	Pending   int64 `json:"pending"`
+	Suspended int64 `json:"suspended"`
+
+	// Distinct people who asked something in the last 7 days, which is
+	// adoption rather than seats.
+	ActiveUsers7d int64 `json:"active_users_7d"`
+
+	TotalQueries      int64   `json:"total_queries"`
+	AvgQueriesPerUser float64 `json:"avg_queries_per_user"`
+}
+
+// UpdateUserRoleRequest changes one member's role. "owner" is deliberately
+// not accepted: transferring ownership is a different operation with
+// different consequences.
+type UpdateUserRoleRequest struct {
+	Role string `json:"role" binding:"required,oneof=maintainer member"`
+}
+
 type AccountVerificationRequest struct {
 	AccountID string `json:"account_id" binding:"required"`
 	Email     string `json:"email" binding:"required,email"`
@@ -145,12 +189,56 @@ type DashboardStatsResponse struct {
 	TotalChats  int64 `json:"total_chats"`
 	ActiveChats int64 `json:"active_chats"`
 
-	// Messages & Cost
-	TotalQueries  int64   `json:"total_queries"`
-	TotalMessages int64   `json:"total_messages"`
-	TotalCost     float64 `json:"total_cost"`
+	// Messages
+	TotalQueries  int64 `json:"total_queries"`
+	TotalMessages int64 `json:"total_messages"`
+
+	// Index health. A document counted in ActiveDocuments is not necessarily
+	// searchable: only 'trained' ones are.
+	DocumentsTrained   int64 `json:"documents_trained"`
+	DocumentsTraining  int64 `json:"documents_training"`
+	DocumentsUntrained int64 `json:"documents_untrained"`
+	DocumentsFailed    int64 `json:"documents_failed"`
+
+	// What the assistant actually knows. A document count says nothing about
+	// size: one manual and one memo both count as 1.
+	TotalChunks  int64 `json:"total_chunks"`
+	IndexedPages int64 `json:"indexed_pages"`
+	StorageBytes int64 `json:"storage_bytes"`
+
+	// Answer quality: the share of questions the corpus could answer.
+	AnsweredQueries   int64   `json:"answered_queries"`
+	UnansweredQueries int64   `json:"unanswered_queries"`
+	AnswerRate        float64 `json:"answer_rate"`
+
+	// Engagement, as distinct from seats: ActiveUsers counts people who are
+	// not suspended, this counts people who actually asked something.
+	ActiveUsers30d int64 `json:"active_users_30d"`
+
+	// Load. Self-hosted inference has no per-token cost, so tokens rather
+	// than spend are the number worth watching.
+	TotalPromptTokens     int64 `json:"total_prompt_tokens"`
+	TotalCompletionTokens int64 `json:"total_completion_tokens"`
+
+	UnansweredQuestions []UnansweredQuestion `json:"unanswered_questions"`
+	TopDocuments        []DocumentUsage      `json:"top_documents"`
 
 	Last30Days []DailyActivity `json:"last_30_days"`
+}
+
+// UnansweredQuestion is a question the corpus could not answer: the content
+// roadmap, in the users' own words.
+type UnansweredQuestion struct {
+	Question string    `json:"question"`
+	AskedAt  time.Time `json:"asked_at"`
+}
+
+// DocumentUsage counts how often a document was cited in an answer. Built
+// from messages.sources, so it only covers answers given after that column
+// was added.
+type DocumentUsage struct {
+	Title     string `json:"title"`
+	Citations int64  `json:"citations"`
 }
 
 type UserResponse struct {

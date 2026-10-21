@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FileText, Trash2, Zap, List, Grid, Search, Info } from "lucide-react";
+import { FileText, Trash2, Zap, Search, Upload as UploadIcon } from "lucide-react";
 import { cn, formatFileSize } from "@/lib/utils";
 import {
   useDeleteDocument,
   useDocumentResources,
+  useDocumentStats,
   useTrainDocuments,
 } from "@/hooks/useDocumentResources";
+import Pagination from "@/components/common/Pagination";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,42 +25,65 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ViewDocumentButton } from "./ViewDocs";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  MAX_DOCUMENTS_PER_ORG,
+  MAX_ORG_STORAGE_BYTES,
+} from "@/constants/uploads";
+import { TDOCUMENT_STATUS } from "@/types/apis";
+
+const PAGE_SIZE = 10;
+
+// Explicit dark variants: the bare -100/-700 pairs were unreadable in dark mode.
+const STATUS_STYLES: Record<TDOCUMENT_STATUS, string> = {
+  untrained: "bg-muted text-muted-foreground",
+  training:
+    "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300 animate-pulse",
+  trained:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  failed: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+};
+
+const TRAIN_LABEL: Record<TDOCUMENT_STATUS, string> = {
+  untrained: "Train",
+  trained: "Retrain",
+  failed: "Retry",
+  training: "Training",
+};
 
 export default function DocumentList() {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [trainingDocId, setTrainingDocId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const canMaintainDoc = !useAuth().isMember;
 
-  const {
-    data: documents = [],
-    isLoading,
-    isError,
-    refetch,
-  } = useDocumentResources();
+  // Debounced: search is a database query now, not an array filter.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const { data, isLoading, isError, isFetching, refetch } =
+    useDocumentResources({ page, limit: PAGE_SIZE, search });
+
+  // Org-wide, so it stays correct no matter which page is shown.
+  const { data: stats } = useDocumentStats();
 
   const { mutate: deleteDoc } = useDeleteDocument();
   const { mutate: trainDocs } = useTrainDocuments();
 
-  const onTrainClick = (docId: string) => {
-    setTrainingDocId(docId);
+  const documents = data?.documents ?? [];
+  const total = data?.total ?? 0;
 
-    trainDocs([docId], {
-      onSettled: () => {
-        setTimeout(() => setTrainingDocId(null), 4000);
-      },
-    });
-  };
+  const usedCount = stats?.used_count ?? 0;
+  const usedBytes = stats?.used_bytes ?? 0;
+  const maxDocuments = stats?.max_documents ?? MAX_DOCUMENTS_PER_ORG;
+  const maxBytes = stats?.max_storage_bytes ?? MAX_ORG_STORAGE_BYTES;
 
-  const handleDelete = (id: string) => {
-    deleteDoc(id);
-  };
-
-  const filteredDocuments = documents.filter((doc) =>
-    doc.file_name.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
-
-  if (isLoading)
+  if (isLoading && !data)
     return (
       <div className="p-6 text-sm text-muted-foreground">
         Loading documents...
@@ -68,7 +93,7 @@ export default function DocumentList() {
   if (isError)
     return (
       <div className="p-6 text-center space-y-3">
-        <p className="text-sm text-red-500">Failed to load documents.</p>
+        <p className="text-sm text-destructive">Failed to load documents.</p>
         <button
           onClick={() => refetch()}
           className="text-sm underline text-muted-foreground hover:text-foreground"
@@ -79,173 +104,159 @@ export default function DocumentList() {
     );
 
   return (
-    <div className="w-full space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
-        <div className="text-lg font-semibold">
-          {filteredDocuments.length} / {documents.length} documents
+    <div className="w-full space-y-5">
+      {/* Toolbar: stacks on phones, inline from sm up */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-base font-semibold">
+            {search
+              ? `${total} ${total === 1 ? "match" : "matches"}`
+              : `${usedCount} of ${maxDocuments} documents`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {formatFileSize(usedBytes)} of {formatFileSize(maxBytes)} used
+          </p>
         </div>
 
-        <div className="flex gap-2 items-center">
-          <div className="relative w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search documents..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          <Button
-            variant={viewMode === "grid" ? "default" : "outline"}
-            size="icon"
-            onClick={() => setViewMode("grid")}
-          >
-            <Grid className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant={viewMode === "list" ? "default" : "outline"}
-            size="icon"
-            onClick={() => setViewMode("list")}
-          >
-            <List className="h-4 w-4" />
-          </Button>
+        <div className="relative w-full sm:w-64">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search documents..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-10"
+          />
         </div>
       </div>
 
-      {/* Document Grid / List */}
-      <div
-        className={
-          viewMode === "grid"
-            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
-            : "space-y-4"
-        }
-      >
-        {filteredDocuments.map((doc) => (
-          <div
-            key={doc.id}
-            className="border rounded-xl p-5 bg-card hover:shadow-md transition-all space-y-4"
-          >
-            {/* File Info */}
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-orange-600" />
+      {documents.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed p-12 text-center">
+          <UploadIcon className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">
+            {search ? "No matching documents" : "No documents yet"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {search
+              ? "Try a different search term."
+              : "Upload a PDF, Word, Excel or text file to get started."}
+          </p>
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {documents.map((doc) => (
+            <li
+              key={doc.id}
+              className={cn(
+                "rounded-xl border bg-card p-4 transition-shadow hover:shadow-sm",
+                // Single column on phones; one row from md up.
+                "flex flex-col gap-3 md:flex-row md:items-center md:gap-4",
+              )}
+            >
+              {/* Identity */}
+              <div className="flex min-w-0 flex-1 items-start gap-3 md:items-center">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/10">
+                  <FileText className="size-5 text-orange-500" />
+                </div>
+
+                <div className="min-w-0">
+                  {/* break-words, not truncate: the end of a filename is
+                      usually what distinguishes it */}
+                  <p
+                    className="text-sm font-semibold break-words line-clamp-2"
+                    title={doc.file_name}
+                  >
+                    {doc.file_name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {formatFileSize(doc.file_size)}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold truncate">{doc.file_name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {formatFileSize(doc.file_size)}
-                </p>
-              </div>
-            </div>
+              {/* Status + actions. Separated by a rule on phones only,
+                  where they sit under the name rather than beside it. */}
+              <div className="flex flex-wrap items-center gap-2 border-t pt-3 md:shrink-0 md:border-0 md:pt-0">
+                <span
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium capitalize",
+                    STATUS_STYLES[doc.status],
+                  )}
+                >
+                  <span className="size-1.5 rounded-full bg-current" />
+                  {doc.status}
+                </span>
 
-            {/* Status + Actions */}
-            <div className="flex items-center justify-between">
-              {/* Status Badge */}
-              <span
-                className={cn(
-                  "flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full capitalize",
-                  doc.status === "untrained" &&
-                    "bg-muted text-muted-foreground",
-                  doc.status === "training" &&
-                    "bg-orange-100 text-orange-700 animate-pulse",
-                  doc.status === "trained" && "bg-blue-100 text-blue-700",
-                  doc.status === "failed" && "bg-red-100 text-red-700",
-                )}
-              >
-                <span className="w-2 h-2 rounded-full bg-current" />
-                {doc.status}
-              </span>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2">
-                {/* view icon */}
                 <ViewDocumentButton documentId={doc.id} />
-                {/* Train Button */}
-                {canMaintainDoc &&
-                  (doc.status === "training" ? (
-                    <Button size="sm" disabled>
-                      <Zap className="w-4 h-4 mr-1" />
-                      Training...
-                    </Button>
-                  ) : (
+
+                {canMaintainDoc && (
+                  <>
                     <Button
                       size="sm"
                       variant={
                         doc.status === "untrained" ? "default" : "outline"
                       }
+                      disabled={doc.status === "training"}
                       className={cn(
+                        "gap-1.5",
                         doc.status === "failed" &&
-                          "border-red-500 text-red-600 hover:bg-red-50",
+                          "border-destructive/50 text-destructive hover:bg-destructive/10",
                       )}
-                      onClick={() => onTrainClick(doc.id)}
+                      onClick={() => trainDocs([doc.id])}
                     >
-                      <Zap className="w-4 h-4 mr-1" />
-                      {doc.status === "untrained" && "Train"}
-                      {doc.status === "trained" && "Retrain"}
-                      {doc.status === "failed" && "Retry"}
+                      <Zap className="size-3.5" />
+                      {TRAIN_LABEL[doc.status]}
                     </Button>
-                  ))}
 
-                {/* Delete */}
-                {canMaintainDoc && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {`Delete "${doc.file_name}"?`}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(doc.id)}
-                          className="bg-destructive hover:bg-destructive/90"
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Delete ${doc.file_name}`}
+                          className="ml-auto text-muted-foreground hover:text-destructive md:ml-0"
                         >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {`Delete "${doc.file_name}"?`}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This also removes the stored file and everything
+                            indexed from it. It cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteDoc(doc.id)}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
                 )}
               </div>
-            </div>
-
-            {/* Training Info Banner */}
-            {trainingDocId === doc.id && (
-              <div className="flex items-start gap-2 rounded-md bg-blue-50 border border-blue-200 p-3 text-blue-700 text-sm">
-                <Info className="w-4 h-4 mt-0.5" />
-                Training has started for this document. It will complete
-                shortly.
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {filteredDocuments.length === 0 && (
-        <div className="p-12 border-2 border-dashed rounded-xl text-center text-muted-foreground">
-          No documents found.
-        </div>
+            </li>
+          ))}
+        </ul>
       )}
+
+      <Pagination
+        page={data?.page ?? page}
+        totalPages={data?.total_pages ?? 0}
+        total={total}
+        limit={data?.limit ?? PAGE_SIZE}
+        onPageChange={setPage}
+        isFetching={isFetching}
+      />
     </div>
   );
 }
