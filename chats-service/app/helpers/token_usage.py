@@ -1,15 +1,8 @@
 from app.database.postgres_client import get_db_cursor
 
-# Per-1K-token prices, by model.
-#
-# Empty, because inference is self-hosted: open-weight models on hardware we
-# own have no marginal per-token price, so every call costs 0.00. The mechanism
-# is kept rather than deleted for two reasons -- token_usage.total_cost is part
-# of the schema and the Go dashboard sums it, and a metered self-hosted gateway
-# could be priced here later.
-#
-# Token counts are still recorded, and still matter: when you own the hardware,
-# tokens are a capacity signal rather than a billing one.
+# Per-1K-token prices. Empty: self-hosted inference has no per-token price, so
+# every call costs 0.00. Kept because token_usage.total_cost is in the schema
+# and the Go dashboard sums it. Token counts still accumulate.
 MODEL_PRICING: dict[str, dict[str, float]] = {}
 
 

@@ -17,16 +17,14 @@ const LISTBOX_ID = "account-id-suggestions";
 type Props = {
   value: string;
   onChange: (next: string) => void;
-  /** Called when a suggestion is chosen, so the form can prefill the email too. */
+  /** Fired on pick, so the form can prefill the email too. */
   onPick?: (account: RecentAccount) => void;
 };
 
 /**
- * Account ID input with suggestions drawn from previous successful logins.
- *
- * Hand-rolled rather than built on a Popover primitive, because the project
- * has no popover/command component and because a menu primitive takes focus
- * away from the input -- which would break typing to filter.
+ * Account ID input with suggestions from previous logins. Hand-rolled: the
+ * project has no popover primitive, and a menu primitive would steal focus
+ * from the input and break typing to filter.
  */
 export function AccountIdField({ value, onChange, onPick }: Props) {
   const [accounts, setAccounts] = useState<RecentAccount[]>([]);
@@ -34,8 +32,7 @@ export function AccountIdField({ value, onChange, onPick }: Props) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Read storage after mount, never during render: the server has no
-  // localStorage, so rendering from it would mismatch on hydration.
+  // After mount, not during render: the server has no localStorage.
   useEffect(() => setAccounts(loadRecentAccounts()), []);
 
   const matches = useMemo(() => {
@@ -51,8 +48,7 @@ export function AccountIdField({ value, onChange, onPick }: Props) {
 
   const isOpen = open && matches.length > 0;
 
-  // Collapse on an outside click. Pointerdown rather than click, so the list
-  // is gone before a click elsewhere lands.
+  // Pointerdown, so the list closes before a click elsewhere lands.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -97,7 +93,7 @@ export function AccountIdField({ value, onChange, onPick }: Props) {
       event.preventDefault();
       setActiveIndex((i) => (i - 1 + matches.length) % matches.length);
     } else if (event.key === "Enter" && activeIndex >= 0) {
-      // Take the highlighted suggestion instead of submitting the form.
+      // Take the suggestion instead of submitting the form.
       event.preventDefault();
       pick(matches[activeIndex]);
     }
@@ -121,8 +117,7 @@ export function AccountIdField({ value, onChange, onPick }: Props) {
           onKeyDown={handleKeyDown}
           placeholder="11XXXXXXXXXXXXXX"
           inputMode="numeric"
-          // Our own list replaces the browser's, which never offers to
-          // remember a field it does not recognise anyway.
+          // Our own list replaces the browser's.
           autoComplete="off"
           role="combobox"
           aria-expanded={isOpen}
@@ -139,7 +134,7 @@ export function AccountIdField({ value, onChange, onPick }: Props) {
             id={LISTBOX_ID}
             role="listbox"
             aria-label="Previously used account IDs"
-            // Keep focus in the input so blur does not close the list first.
+            // Keep focus in the input so blur does not close the list.
             onPointerDown={(event) => event.preventDefault()}
             className="bg-popover text-popover-foreground absolute top-full left-0 z-50 mt-1 w-full overflow-hidden rounded-md border shadow-md"
           >

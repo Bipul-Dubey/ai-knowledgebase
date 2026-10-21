@@ -118,12 +118,8 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     chunk_index INT NOT NULL,
     chunk_text TEXT NOT NULL,
-    -- Must match EMBEDDING_DIM in chats-service config, which must match the
-    -- embedding model: 1024 = qwen3-embedding:0.6b, 768 = embeddinggemma-2.
-    -- Changing the model means changing this width, which is NOT an additive
-    -- change: it needs a hand-run migration that truncates document_chunks,
-    -- alters the column, rebuilds the index below, and resets every document
-    -- to 'untrained' so training re-embeds it.
+    -- Must match EMBEDDING_DIM (1024 = qwen3-embedding:0.6b). Changing it is
+    -- not additive: truncate, alter, reindex, reset documents to 'untrained'.
     embedding VECTOR(1024) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
 

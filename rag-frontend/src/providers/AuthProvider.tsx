@@ -75,9 +75,7 @@ export const AuthProvider = ({ children }: Props) => {
       predicate: (query) => query.queryKey[0] !== "document-download-url",
     });
 
-    // Only the session token. localStorage.clear() would also discard the
-    // remembered account IDs the login form suggests -- the one thing someone
-    // signing out of a 16-digit account most wants kept.
+    // Not clear(): that would also discard the remembered account IDs.
     localStorage.removeItem("access_token");
 
     router.replace(PATHS.pl.LOGIN);

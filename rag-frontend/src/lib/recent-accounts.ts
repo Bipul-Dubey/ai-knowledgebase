@@ -1,16 +1,7 @@
 /**
  * Account IDs this browser has signed in with, so the login form can suggest
- * them the way a password manager suggests an email.
- *
- * A 16-digit account ID is the one credential nobody can remember, and unlike
- * email or password it is not something browsers offer to store, so the app
- * has to do it.
- *
- * Scope and lifetime: this is per-browser convenience data, written only after
- * a *successful* login (so typos never get remembered) and removable per entry
- * from the form. It is deliberately not treated as durable state -- every read
- * tolerates it being absent, blocked or corrupt, because localStorage throws
- * in private windows and when site data is disabled.
+ * them -- browsers never remember this field. Written only after a successful
+ * login; every read tolerates storage being absent, blocked or corrupt.
  */
 
 export type RecentAccount = {
@@ -33,7 +24,7 @@ function isRecentAccount(value: unknown): value is RecentAccount {
   );
 }
 
-/** Most recently used first. Returns [] if storage is unavailable or corrupt. */
+/** Most recent first. [] if storage is unavailable or corrupt. */
 export function loadRecentAccounts(): RecentAccount[] {
   if (typeof window === "undefined") return [];
 
@@ -49,7 +40,7 @@ export function loadRecentAccounts(): RecentAccount[] {
       .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
       .slice(0, MAX_ENTRIES);
   } catch {
-    // Private window, blocked site data, or someone else's malformed value.
+    // Private window, blocked site data, or a malformed value.
     return [];
   }
 }
@@ -58,15 +49,12 @@ function persist(accounts: RecentAccount[]): RecentAccount[] {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
   } catch {
-    // Non-fatal: suggestions simply will not survive this session.
+    // Non-fatal: suggestions just will not survive the session.
   }
   return accounts;
 }
 
-/**
- * Record a successful login. Upserts on accountId so the same account moves to
- * the top rather than accumulating duplicates.
- */
+/** Record a successful login. Upserts on accountId, no duplicates. */
 export function rememberAccount(
   entry: Omit<RecentAccount, "lastUsedAt">,
 ): RecentAccount[] {
@@ -81,7 +69,7 @@ export function rememberAccount(
   );
 }
 
-/** Drop one entry, including whatever email was stored alongside it. */
+/** Drop one entry, including its stored email. */
 export function forgetAccount(accountId: string): RecentAccount[] {
   if (typeof window === "undefined") return [];
   return persist(

@@ -1,24 +1,10 @@
-"""Document blob storage, with a development backend.
+"""Document blob storage. ENV=development writes to LOCAL_STORAGE_DIR,
+anything else to S3. Both emit the same key into documents.s3_key, so
+switching needs no schema change -- but migrates nothing either way.
 
-The backend follows ENV -- the same single switch the rest of the stack uses:
-
-    ENV=development     files on local disk under LOCAL_STORAGE_DIR
-    anything else       AWS S3
-
-Only the exact value "development" selects local disk, so staging and
-production always take the real path.
-
-Both backends produce the same opaque key, and the key is what gets stored in
-documents.s3_key, so switching backends needs no schema change. Nothing is
-migrated on a switch: files written by one backend are invisible to the other.
-
-S3 hands out presigned URLs -- time-limited links a browser can open with no
-session of its own. The local backend has to reproduce that, because the
-frontend opens the download URL in a new tab and a tab navigation carries no
-Authorization header. So it signs the key and an expiry with HMAC-SHA256 and
-serves the bytes from GET /api/v1/documents/local/{key}. The obvious
-alternative -- a statically served directory -- would hand every tenant's
-documents to anyone who could guess a path.
+Disk has no presigned URLs, so local links are HMAC-signed with an expiry and
+served by GET /api/v1/documents/local/{key} (a tab navigation sends no
+Authorization header). A static directory would expose every tenant's files.
 """
 
 from __future__ import annotations
@@ -37,7 +23,7 @@ from urllib.parse import quote
 
 from app.core.config import settings
 
-# Kept here so the route and the URL builder cannot drift apart.
+# Shared so the route and the URL builder cannot drift apart.
 LOCAL_URL_PREFIX = "/api/v1/documents/local/"
 
 
@@ -59,9 +45,7 @@ def backend_name() -> str:
 
 
 def _s3():
-    # Imported lazily: app.helpers.s3_storage constructs a boto3 client at
-    # import time, which is pointless in local mode and needs AWS settings
-    # that a dev machine will not have.
+    # Lazy: s3_storage builds a boto3 client at import time.
     from app.helpers import s3_storage
 
     return s3_storage
@@ -75,16 +59,12 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
 def build_key(org_id: str, filename: str) -> str:
     """Build the storage key for a new upload.
 
-    The filename is reduced to a known-safe character set rather than merely
-    having its spaces replaced. On the local backend the key becomes a real
-    filesystem path, so an uploaded name containing "../" would otherwise walk
-    straight out of the storage root.
+    The name is reduced to a safe character set: on the local backend the key
+    becomes a real path, so "../" in an upload name would escape the root.
     """
     stem = Path(filename or "file").name
     safe = _UNSAFE.sub("_", stem)
-    # Collapse runs and drop underscores butting up against a dot, so
-    # "my report (final).pdf" becomes "my_report_final.pdf" rather than
-    # accumulating one underscore per stripped character.
+    # Collapse runs so "my report (final).pdf" -> "my_report_final.pdf".
     safe = re.sub(r"_+", "_", safe)
     safe = re.sub(r"_+(?=\.)", "", safe).strip("._") or "file"
     return f"organizations/{org_id}/documents/{uuid.uuid4()}_{safe}"
@@ -111,8 +91,7 @@ def local_root() -> Path:
 def local_path(key: str) -> Path:
     """Resolve a key to a path, refusing anything outside the storage root.
 
-    build_key sanitises new uploads, but this is the last line of defence for
-    a key that arrived from the database or a request path.
+    Last line of defence for a key arriving from the database or a URL.
     """
     root = local_root()
     candidate = (root / key.lstrip("/")).resolve()
@@ -141,8 +120,7 @@ def _sign(key: str, expires_at: int) -> str:
 def verify_local_url(key: str, expires_at: int, signature: str) -> None:
     """Raise StorageError unless the signature is valid and still current.
 
-    The expiry is part of the signed message, so it cannot be extended by
-    editing the query string. Compared in constant time.
+    The expiry is signed, so it cannot be extended via the query string.
     """
     if not hmac.compare_digest(_sign(key, expires_at), signature):
         raise StorageError("invalid signature")

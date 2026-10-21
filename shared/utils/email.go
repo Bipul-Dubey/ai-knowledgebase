@@ -9,8 +9,7 @@ import (
 	"strings"
 )
 
-// EmailSender sends mail over SMTP, or writes it to the log instead when
-// running in development. See isDevelopment.
+// EmailSender sends mail over SMTP, or logs it in development.
 type EmailSender struct {
 	from     string
 	password string
@@ -19,15 +18,9 @@ type EmailSender struct {
 	logOnly  bool
 }
 
-// isDevelopment reports whether this is a development run.
-//
-// ENV is the single switch for dev-mode behaviour across the whole stack: mail
-// goes to the log here, and uploads go to local disk in chats-service. One
-// thing to set, one thing to get wrong.
-//
-// Only the exact value "development" counts. Production, staging and an unset
-// ENV all take the real path, so a deployed service can never silently swallow
-// its mail.
+// isDevelopment reports a development run. ENV is the single dev-mode switch
+// across the stack. Only the exact value "development" counts, so a deployed
+// service never silently swallows its mail.
 func isDevelopment() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("ENV")), "development")
 }
@@ -43,9 +36,8 @@ func NewEmailSender() *EmailSender {
 	}
 }
 
-// hrefPattern extracts the action links from the HTML body. The verification,
-// invite or reset link is the only part of these emails anyone needs in
-// development, and digging it out of escaped markup in a log line is miserable.
+// hrefPattern extracts the action links -- the only part of these emails
+// anyone needs in development.
 var hrefPattern = regexp.MustCompile(`href=["']([^"']+)["']`)
 
 // SendEmail sends an HTML email with subject and body
@@ -76,11 +68,8 @@ func (s *EmailSender) SendEmail(to, subject, body string) error {
 	return smtp.SendMail(s.host+":"+s.port, auth, s.from, []string{to}, msg)
 }
 
-// logEmail writes the email to the service log instead of sending it.
-// One field per line and a fixed [EMAIL] prefix, so the whole thing can be
-// pulled out of a noisy container log with:
-//
-//	docker compose logs users-service | grep EMAIL
+// logEmail logs the email instead of sending it. Fixed [EMAIL] prefix, so:
+// docker compose logs users-service | grep EMAIL
 func (s *EmailSender) logEmail(to, subject, body string) {
 	var b strings.Builder
 

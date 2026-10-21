@@ -121,11 +121,8 @@ async def download_document(document_id: str, request: Request):
 # ==========================================================
 # 📂 Serve a locally-stored document  (ENV=development only)
 # ==========================================================
-# Stands in for an S3 presigned URL. Deliberately not JWT-authenticated: the
-# frontend opens this in a new tab, and a tab navigation sends no Authorization
-# header. Authority comes from the HMAC signature over the storage key and the
-# expiry, which is the same contract a presigned URL offers. AuthMiddleware
-# skips this prefix for that reason.
+# Stands in for an S3 presigned URL: authority is the HMAC signature over key
+# and expiry, not a JWT, because a tab navigation sends no Authorization header.
 @router.get("/local/{key:path}")
 async def serve_local_document(key: str, exp: int, sig: str):
     if not storage.is_local():

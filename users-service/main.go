@@ -20,8 +20,7 @@ func main() {
 		log.Println("⚠️  No .env file found, relying on environment variables")
 	}
 
-	// Resolve JWT_SECRET now so a missing or weak value fails at startup
-	// instead of at the first authenticated request. Exits on failure.
+	// Fail at startup, not at the first authenticated request.
 	_ = utils.JWTSecret()
 
 	// Initialize database

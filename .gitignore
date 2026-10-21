@@ -60,9 +60,7 @@ out/
 # Dependency directories
 vendor/
 
-# Go workspace file
-# NOTE: go.work is intentionally COMMITTED - users-service/Dockerfile copies it
-# and a fresh clone cannot build without it. Only the generated sum is ignored.
+# go.work is committed on purpose (the Dockerfile copies it); only the sum.
 go.work.sum
 
 # Test binary
@@ -94,8 +92,7 @@ local_data/
 node_modules
 # env files (can opt-in for committing if needed)
 .env*
-# ...but the templates MUST be committed, or a fresh clone has no .env and
-# `docker compose up` fails on every service's `env_file: .env`.
+# but the template must be committed, or a fresh clone has no .env at all
 !.env.example
 
 # vercel

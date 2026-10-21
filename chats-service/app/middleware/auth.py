@@ -14,10 +14,8 @@ from app.utils.response import APIResponse
 JWT_SECRET = settings.JWT_SECRET
 JWT_ALGORITHM = settings.JWT_ALGORITHM
 
-# No fallback secret. A default would be shared by every checkout, letting
-# anyone who had seen the source forge tokens for any organization. It also has
-# to match users-service exactly, and a silent default is precisely how the two
-# services drift apart. Fail at import instead.
+# No fallback: a default would be shared by every checkout, and a silent
+# default is how two services drift apart.
 if not JWT_SECRET:
     raise RuntimeError(
         "JWT_SECRET is not set - refusing to start. It must match the value "
@@ -31,15 +29,8 @@ if len(JWT_SECRET) < 32:
     )
 
 
-# Paths that do not require a JWT:
-#   /docs, /redoc, /openapi.json  developer documentation
-#   /health                       liveness probe; must answer without creds
-#   /api/v1/documents/local/      dev-only local file serving. Not actually
-#                                 unauthenticated -- it verifies an HMAC
-#                                 signature over the storage key and an expiry,
-#                                 the same contract as an S3 presigned URL,
-#                                 which a browser tab can follow without
-#                                 sending an Authorization header.
+# No JWT required. documents/local is HMAC-signed instead, because a browser
+# tab navigation cannot send an Authorization header.
 PUBLIC_PATH_PREFIXES = (
     "/docs",
     "/redoc",

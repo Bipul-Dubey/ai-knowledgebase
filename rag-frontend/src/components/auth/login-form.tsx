@@ -37,8 +37,7 @@ export function LoginForm({
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Password stays uncontrolled so the browser password manager behaves
-    // normally; only the two fields we suggest are held in state.
+    // Password stays uncontrolled so password managers behave normally.
     const formData = new FormData(e.currentTarget);
     const password = formData.get("password") as string;
 
@@ -60,8 +59,7 @@ export function LoginForm({
             // OPTIONAL: store token
             localStorage.setItem("access_token", user.access_token);
 
-            // Recorded only on success, so a mistyped account ID never ends
-            // up being suggested back to the user.
+            // Only on success, so typos never get suggested back.
             rememberAccount({
               accountId: accountId.trim(),
               organizationName: user.organization_name,
@@ -108,7 +106,7 @@ export function LoginForm({
           onChange={setAccountId}
           onPick={(account) => {
             setAccountId(account.accountId);
-            // Fill a blank email only -- never overwrite what is being typed.
+            // Blank email only -- never overwrite what is being typed.
             if (account.email && !email.trim()) setEmail(account.email);
           }}
         />
@@ -123,9 +121,7 @@ export function LoginForm({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="m@example.com"
-            // Pairs with current-password below. Together they are what tell a
-            // password manager this is a sign-in form worth filling -- there
-            // was no autoComplete anywhere in the app before.
+            // Pairs with current-password: marks this a sign-in form.
             autoComplete="username"
             required
           />

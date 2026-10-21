@@ -45,8 +45,7 @@ func validateJWT(tokenStr string, db *gorm.DB) (*utils.JWTClaims, error) {
 		func(token *jwt.Token) (interface{}, error) {
 			return utils.JWTSecret(), nil
 		},
-		// Reject any token not signed with the expected algorithm, rather than
-		// trusting the "alg" header the token itself supplies.
+		// Don't trust the "alg" header the token itself supplies.
 		jwt.WithValidMethods([]string{utils.SigningMethod.Alg()}),
 	)
 

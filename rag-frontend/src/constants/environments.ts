@@ -1,11 +1,8 @@
 /**
- * NEXT_PUBLIC_* values are inlined by `next build` and cannot change at
- * runtime. If one is missing when the bundle is built, every API call
- * resolves against the frontend's own origin and 404s with no useful error -
- * so this fails the production build instead of shipping a broken bundle.
+ * NEXT_PUBLIC_* are inlined by `next build`. A missing value makes every API
+ * call resolve against the frontend's own origin, so fail the build instead.
  *
- * Local dev reads rag-frontend/.env.local (NOT the repo-root .env).
- * Docker reads the repo-root .env, passed through as build args by compose.
+ * Dev reads rag-frontend/.env.local; Docker gets build args from the root .env.
  */
 const required = (name: string, value: string | undefined): string => {
   if (value) return value;

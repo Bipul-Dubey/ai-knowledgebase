@@ -3,9 +3,7 @@ services:
     build:
       context: ./rag-frontend
       dockerfile: Dockerfile
-      # Interpolated from the repo-root .env, which compose loads automatically.
-      # Required because next build bakes these into the client bundle; the
-      # env_file below arrives too late to affect it.
+      # next build bakes these into the bundle, so env_file is too late.
       args:
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
         NEXT_PUBLIC_API_BASE_CHAT: ${NEXT_PUBLIC_API_BASE_CHAT}
@@ -48,9 +46,7 @@ services:
     env_file:
       - .env
     volumes:
-      # Development document storage (ENV=development). A bind mount rather
-      # than a named volume, so the files are visible on the host and a Celery
-      # worker running outside Docker reads the same bytes the API wrote.
+      # Dev document storage; bind-mounted so the worker sees the same files.
       - ./local_data:/app/local_data
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -58,14 +54,9 @@ services:
       - microservices-network
     restart: unless-stopped
 
-  # Consumes the training jobs chats-service publishes. Without it, uploads
-  # queue to RabbitMQ and documents sit at status='training' forever -- nothing
-  # is ever chunked or embedded.
-  #
-  # Same image and same .env as chats-service, and critically the same
-  # ./local_data mount: in development the API writes uploads to disk and this
-  # worker reads them back, so both must see the same files. It also needs
-  # host.docker.internal to reach Ollama on the host for embeddings.
+  # Consumes the training jobs chats-service publishes; without it documents
+  # sit at status='training' forever. Shares .env, the ./local_data mount the
+  # API writes uploads to, and host access for Ollama.
   celery-worker:
     build:
       context: .
@@ -84,9 +75,8 @@ services:
     networks:
       - microservices-network
     restart: unless-stopped
-    # concurrency=1 on purpose: embedding is the bottleneck and Ollama
-    # serialises requests anyway, so extra prefork children would only queue on
-    # it while each opened its own Postgres pool.
+    # concurrency=1: Ollama serialises requests anyway, and each extra child
+    # would open its own Postgres pool.
     command:
       - celery
       - -A
@@ -108,12 +98,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # One-shot schema apply. Runs on every `up`, before the app services start.
-  # queries/queries.sql is idempotent, so re-running is a no-op.
-  #
-  # Deliberately NOT /docker-entrypoint-initdb.d: that only runs when the data
-  # volume is first created, so it silently skips an existing volume -- which is
-  # exactly how you end up with a database and no tables in it.
+  # One-shot schema apply before the app services start. queries.sql is
+  # idempotent so re-running is a no-op. Not /docker-entrypoint-initdb.d: that
+  # only fires on a brand-new volume, silently skipping an existing one.
   db-migrate:
     image: pgvector/pgvector:pg14
     depends_on:
@@ -126,30 +113,24 @@ services:
     volumes:
       - ./queries:/queries:ro
     entrypoint: ["/bin/sh", "-c"]
-    # command MUST be a list whose single element is the entire script.
-    # Given a plain string, compose word-splits it, so `sh -c` receives only
-    # the first word as the script and the rest become $$0, $$1, ... -- which
-    # fails as: pg_isready: 1: Syntax error: end of file unexpected
+    # Must be a single-element list: compose word-splits a string command, so
+    # `sh -c` would receive only the first word as the script.
     command:
       - |
         set -e
-        # The healthcheck can pass against the temporary server initdb runs
-        # during first-time setup, so wait for a connection that really answers.
+        # The healthcheck can pass against initdb's temporary server.
         until pg_isready -h "$$DB_HOST" -p "$$DB_PORT" -U "$$DB_USER" -d "$$DB_NAME" -q; do
           echo "waiting for postgres..."
           sleep 1
         done
-        # ON_ERROR_STOP turns a genuine SQL failure into a non-zero exit, which
-        # blocks the app services from starting against a half-built schema.
+        # Non-zero exit blocks the app services starting half-migrated.
         psql -v ON_ERROR_STOP=1 -h "$$DB_HOST" -p "$$DB_PORT" -U "$$DB_USER" -d "$$DB_NAME" -f /queries/queries.sql
     networks:
       - microservices-network
     restart: "no"
 
   postgres:
-    # pgvector build, NOT plain postgres:14 -- the stock image has no vector
-    # extension, so CREATE EXTENSION vector fails and document_chunks (the core
-    # RAG table) never gets created.
+    # pgvector build: stock postgres:14 has no vector extension.
     image: pgvector/pgvector:pg14
     container_name: postgres-db
     environment:

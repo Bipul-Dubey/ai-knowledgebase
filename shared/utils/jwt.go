@@ -9,10 +9,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// SigningMethod is the only algorithm this service issues or accepts.
-// Pinning it prevents algorithm-confusion attacks, where a forged token
-// declares "alg": "none" or an asymmetric algorithm and the verifier is
-// tricked into treating the public key (or nothing at all) as the secret.
+// SigningMethod is the only algorithm issued or accepted. Pinning it prevents
+// algorithm-confusion attacks.
 var SigningMethod = jwt.SigningMethodHS256
 
 const minJWTSecretLen = 32
@@ -22,16 +20,9 @@ var (
 	jwtSecret     []byte
 )
 
-// JWTSecret returns the HMAC signing key from the JWT_SECRET environment
-// variable, resolved once and cached.
-//
-// There is deliberately no default. A fallback key would be identical across
-// every checkout and deployment, so anyone who had seen the source could mint
-// valid tokens for any user in any organization. The process exits instead, so
-// the misconfiguration cannot go unnoticed.
-//
-// chats-service (Python) must be given the identical value, or tokens issued
-// here are rejected there. Generate one with: openssl rand -hex 48
+// JWTSecret returns the HMAC signing key from JWT_SECRET, resolved once. No
+// default: a shared fallback would let anyone who had seen the source mint
+// valid tokens. chats-service must get the same value (openssl rand -hex 48).
 func JWTSecret() []byte {
 	jwtSecretOnce.Do(func() {
 		secret := os.Getenv("JWT_SECRET")

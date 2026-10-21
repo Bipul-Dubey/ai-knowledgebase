@@ -33,10 +33,7 @@ async def get_embedding_with_retry(
 
             embedding = response.data[0].embedding
 
-            # Fail loudly on a model/schema mismatch. Without this the first
-            # symptom is a pgvector "expected N dimensions, not M" error from
-            # deep inside the training job, which names neither the model nor
-            # the column it disagrees with.
+            # pgvector's own error names neither the model nor the column.
             if len(embedding) != settings.EMBEDDING_DIM:
                 raise ValueError(
                     f"{settings.EMBEDDING_MODEL} returned {len(embedding)} "

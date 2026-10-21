@@ -1,15 +1,6 @@
-// Go workspace for the ai-knowledgebase monorepo.
-//
-// This file is COMMITTED deliberately, which is unusual for Go projects.
-// Two things break without it:
-//
-//   1. users-service/Dockerfile runs `COPY go.work ./`, so `docker compose up`
-//      on a fresh clone fails with: "/go.work": not found
-//   2. users-service/go.mod does not require the shared module, and lists no
-//      gorm/jwt dependencies of its own. Those imports resolve only because
-//      this workspace unifies the two module graphs.
-//
-// go.work.sum stays untracked (see .gitignore) - it is generated.
+// Committed deliberately: users-service/Dockerfile copies it, and
+// users-service/go.mod does not require the shared module -- only this
+// workspace makes those imports resolve. go.work.sum stays untracked.
 
 go 1.24.6
 
