@@ -17,6 +17,43 @@ def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int = 0) -
     ) * pricing["completion"]
     return round(cost, 6)
 
+class UsageAccumulator:
+    """Collects token counts in memory so a job writes once instead of once
+    per API call.
+
+    The training loop otherwise upserts the same contended token_usage row
+    once per chunk -- hundreds of writes to record one document.
+    """
+
+    def __init__(self, model: str):
+        self.model = model
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+
+    def add(self, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
+        self.prompt_tokens += prompt_tokens
+        self.completion_tokens += completion_tokens
+
+    @property
+    def total(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+    async def flush(self, organization_id: str, user_id: str) -> None:
+        """Write the accumulated totals, then reset. No-op when empty."""
+        if not self.total:
+            return
+
+        await record_token_usage(
+            organization_id=organization_id,
+            user_id=user_id,
+            model=self.model,
+            prompt_tokens=self.prompt_tokens,
+            completion_tokens=self.completion_tokens,
+        )
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+
+
 async def record_token_usage(
     organization_id: str,
     user_id: str,

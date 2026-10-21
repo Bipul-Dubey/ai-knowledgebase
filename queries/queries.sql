@@ -81,6 +81,8 @@ CREATE TABLE IF NOT EXISTS documents (
     file_name VARCHAR(1024) NOT NULL,
     s3_key TEXT NOT NULL,
     file_size BIGINT,
+    content_hash TEXT,
+    index_fingerprint TEXT,
     status VARCHAR(20) DEFAULT 'pending',
     trainable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -117,7 +119,13 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     chunk_index INT NOT NULL,
+    page INT,
+    section TEXT,
     chunk_text TEXT NOT NULL,
+    -- Keyword half of hybrid retrieval. STORED and generated so it can never
+    -- drift from chunk_text. The language is baked in because a generated
+    -- column requires an immutable expression.
+    chunk_tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', chunk_text)) STORED,
     -- Must match EMBEDDING_DIM (1024 = qwen3-embedding:0.6b). Changing it is
     -- not additive: truncate, alter, reindex, reset documents to 'untrained'.
     embedding VECTOR(1024) NOT NULL,
@@ -134,6 +142,9 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_org
 -- empty table at first boot -- produces an index with near-useless recall that
 -- has to be dropped and rebuilt after ingest. HNSW has no training step and is
 -- safe to create up front, which is what makes automated schema setup viable.
+-- The GIN index on chunk_tsv lives in the migrations section at the end of
+-- this file: on an existing database the CREATE TABLE above is skipped, so the
+-- column does not exist yet at this point.
 CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding
     ON document_chunks
     USING hnsw (embedding vector_cosine_ops);
@@ -188,6 +199,35 @@ CREATE TABLE IF NOT EXISTS token_usage (
 
 CREATE INDEX IF NOT EXISTS idx_token_usage_org ON token_usage(organization_id);
 CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id);
+
+-- ====================================================
+-- Additive migrations
+-- ====================================================
+-- Re-applied on every `docker compose up`, so changes to a table that already
+-- exists go here: the CREATE above is skipped once the table is present.
+-- Additive and idempotent only.
+
+-- Page-aware chunks: citations need to name a page, and a chunk that carries
+-- its document and section retrieves better than a bare excerpt.
+ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS page INT;
+ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS section TEXT;
+
+-- Change detection. index_fingerprint covers the content AND how it was
+-- indexed, so changing chunk size or embedding model forces a re-embed
+-- instead of being silently skipped.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS index_fingerprint TEXT;
+
+-- Hybrid retrieval. Adding a STORED generated column rewrites the table, which
+-- is fine at this size; on a large corpus do it in a maintenance window.
+ALTER TABLE document_chunks
+    ADD COLUMN IF NOT EXISTS chunk_tsv tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', chunk_text)) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_document_chunks_tsv
+    ON document_chunks
+    USING gin (chunk_tsv);
+
 
 -- ====================================================
 -- End of Basic RAG Schema (Organizations & Users Preserved)

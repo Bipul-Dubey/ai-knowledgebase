@@ -1,12 +1,14 @@
 import asyncio
 import traceback
-import numpy as np
+from hashlib import sha256
+
 from celery import Celery
 from celery.signals import worker_process_init
 
 from app.database.postgres_client import get_db_cursor
 from app.helpers.file_manager import FileManager
-from app.helpers.get_embedding_with_retry import get_embedding_with_retry
+from app.helpers.get_embedding_with_retry import embed_texts
+from app.helpers.token_usage import UsageAccumulator
 from app.core.config import settings
 import app.database.postgres_client as pg
 
@@ -29,6 +31,40 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     task_default_delivery_mode="persistent",
 )
+
+
+def index_fingerprint(content_hash: str | None) -> str:
+    """Identity of a document's index: its content *and* how it was indexed.
+
+    Hashing the chunking and embedding settings in means that changing chunk
+    size or the embedding model invalidates every fingerprint, so the next run
+    re-embeds instead of silently skipping stale vectors.
+    """
+    parts = [
+        content_hash or "",
+        settings.EMBEDDING_MODEL,
+        str(settings.EMBEDDING_DIM),
+        str(settings.CHUNK_SIZE),
+        str(settings.CHUNK_OVERLAP),
+        "ctxhdr" if settings.CONTEXTUAL_CHUNK_HEADER else "plain",
+    ]
+    return sha256("|".join(parts).encode()).hexdigest()
+
+
+async def mark_document_indexed(doc_id: str, fingerprint: str) -> None:
+    async with get_db_cursor(commit=True) as cur:
+        await cur.execute(
+            """
+            UPDATE documents
+            SET status = 'trained',
+                index_fingerprint = %s,
+                last_trained_at = NOW(),
+                updated_at = NOW()
+            WHERE id = %s
+              AND deleted_at IS NULL
+            """,
+            (fingerprint, doc_id),
+        )
 
 
 # Training Job Status (SCHEMA SAFE)
@@ -104,22 +140,13 @@ async def update_document_status(doc_id, status, error_message=None):
             )
 
 
-# Utility: safe embedding conversion
-def _to_float_array(x):
-    if isinstance(x, (list, tuple)):
-        try:
-            return np.array([float(i) for i in x], dtype=float)
-        except Exception:
-            pass
-    return np.array([], dtype=float)
-
-
 # Training Logic (BASE RAG — DOCUMENTS ONLY)
 async def train_sources(
     job_id: str,
     org_id: str,
     user_id: str,
     document_ids: list[str] | None = None,
+    force: bool = False,
 ):
     total_chunks = 0
     any_success = False
@@ -134,7 +161,7 @@ async def train_sources(
         if document_ids:
             await cur.execute(
                 """
-                SELECT id, s3_key
+                SELECT id, s3_key, file_name, content_hash, index_fingerprint
                 FROM documents
                 WHERE organization_id = %s
                 AND id = ANY(%s)
@@ -146,7 +173,7 @@ async def train_sources(
         else:
             await cur.execute(
                 """
-                SELECT id, s3_key
+                SELECT id, s3_key, file_name, content_hash, index_fingerprint
                 FROM documents
                 WHERE organization_id = %s
                 AND trainable = TRUE
@@ -157,62 +184,80 @@ async def train_sources(
 
         documents = await cur.fetchall()
 
+    # One accumulator for the whole job: the embedding loop would otherwise
+    # upsert the same contended token_usage row once per chunk.
+    usage = UsageAccumulator(settings.EMBEDDING_MODEL)
+
     # Process documents
     for doc in documents:
         doc_id = doc["id"]
+        fingerprint = index_fingerprint(doc.get("content_hash"))
+
+        # Nothing about the content or the indexing settings has changed, so
+        # the stored vectors are still correct.
+        if not force and doc.get("index_fingerprint") == fingerprint:
+            print(f"[TRAIN] {doc['file_name']}: unchanged, skipped")
+            await mark_document_indexed(doc_id, fingerprint)
+            any_success = True
+            continue
+
         await update_document_status(doc_id, "training")
 
         try:
-            content = await FileManager.get_text_from_source(
-                {"s3_key": doc["s3_key"]}
+            chunks = await FileManager.get_chunks(
+                {"s3_key": doc["s3_key"]}, doc["file_name"]
             )
-            if not content.strip():
-                raise ValueError("Empty document")
-
-            chunks = FileManager.chunk_text(content)
             if not chunks:
-                raise ValueError("No chunks generated")
+                raise ValueError("No chunks generated (empty or unreadable document)")
 
-            embeddings = []
-            for chunk in chunks:
-                emb = await get_embedding_with_retry(chunk, org_id, user_id)
-                arr = _to_float_array(emb)
-                if arr.size == 0:
-                    raise ValueError("Invalid embedding")
-                embeddings.append(arr.tolist())
+            # The header goes into the embedding only; chunk_text stays clean.
+            embeddings = await embed_texts(
+                [c.embed_text for c in chunks], org_id, user_id, usage=usage
+            )
+
+            rows = [
+                (
+                    doc_id,
+                    org_id,
+                    chunk.index,
+                    chunk.text,
+                    chunk.page,
+                    chunk.section,
+                    "[" + ",".join(map(str, vector)) + "]",
+                )
+                for chunk, vector in zip(chunks, embeddings)
+            ]
 
             async with get_db_cursor(commit=True) as cur:
                 await cur.execute(
                     "DELETE FROM document_chunks WHERE document_id = %s",
                     (doc_id,),
                 )
-
-                for idx, chunk in enumerate(chunks):
-                    emb_literal = "[" + ",".join(map(str, embeddings[idx])) + "]"
-
-                    await cur.execute(
-                        """
-                        INSERT INTO document_chunks (
-                            document_id,
-                            organization_id,
-                            chunk_index,
-                            chunk_text,
-                            embedding
-                        )
-                        VALUES (%s, %s, %s, %s, %s::vector)
-                        """,
-                        (
-                            doc_id,
-                            org_id,
-                            idx,
-                            chunk,
-                            emb_literal,
-                        ),
+                # One statement instead of one per chunk; psycopg pipelines it.
+                await cur.executemany(
+                    """
+                    INSERT INTO document_chunks (
+                        document_id,
+                        organization_id,
+                        chunk_index,
+                        chunk_text,
+                        page,
+                        section,
+                        embedding
                     )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
+                    """,
+                    rows,
+                )
 
-            await update_document_status(doc_id, "trained")
+            await mark_document_indexed(doc_id, fingerprint)
             total_chunks += len(chunks)
             any_success = True
+            pages = {c.page for c in chunks if c.page}
+            print(
+                f"[TRAIN] {doc['file_name']}: {len(chunks)} chunks"
+                f"{f' across {len(pages)} pages' if pages else ''} embedded"
+            )
 
             await update_training_job_status(
                 job_id,
@@ -224,6 +269,9 @@ async def train_sources(
             traceback.print_exc()
             await update_document_status(doc_id, "failed", str(e))
             any_fail = True
+
+    # One token_usage write for the whole job.
+    await usage.flush(org_id, user_id)
 
     # Final Status
     final_status = (
@@ -245,11 +293,11 @@ async def train_sources(
 
 # Celery Entry
 @celery_app.task(bind=True, max_retries=3)
-def run_training_job(self, job_id, org_id, user_id, document_ids=None):
+def run_training_job(self, job_id, org_id, user_id, document_ids=None, force=False):
     print("🔥🔥🔥🔥🔥🔥🔥🔥 TRAIN_DOCUMENT 🔥🔥🔥🔥🔥🔥🔥🔥")
     try:
         print(f"🚀 Starting training job {job_id}")
-        asyncio.run(train_sources(job_id, org_id, user_id, document_ids))
+        asyncio.run(train_sources(job_id, org_id, user_id, document_ids, force))
         return f"✅ Job {job_id} completed"
     except Exception as e:
         traceback.print_exc()

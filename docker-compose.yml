@@ -85,6 +85,25 @@ services:
       - --loglevel=info
       - --concurrency=1
 
+  # Cross-encoder reranking. No published port: internal network only.
+  # chats-service degrades to plain vector order if this is down, so it is
+  # deliberately not a depends_on of anything.
+  reranker-service:
+    build:
+      context: ./reranker-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:

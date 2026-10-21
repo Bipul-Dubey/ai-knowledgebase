@@ -113,17 +113,57 @@ Forgetting that last step is the quiet failure -- documents stay `trained` with
 no chunks, and every question answers "Not found in the provided documents"
 with nothing in any log to explain why.
 
-Three things that bite:
+#### Ollama server settings
 
-- **Ollama must be reachable from the container.** If calls fail with a
-  connection error, restart Ollama with `OLLAMA_HOST=0.0.0.0:11434`.
-- **Keep both models resident.** Every query embeds *then* generates. If
-  Ollama holds only one model in memory it evicts and reloads on each request,
-  adding seconds. Check `OLLAMA_MAX_LOADED_MODELS` is at least 2, and set a
-  generous `OLLAMA_KEEP_ALIVE`.
-- **Cost tracking is always zero.** Self-hosted inference has no per-token
-  price, so `token_usage.total_cost` stays at 0. Token counts still accumulate
-  -- on your own hardware they are a capacity signal, not a billing one.
+These configure the Ollama **host**, not this repo:
+
+| Variable | Set to | Default | Why |
+|---|---|---|---|
+| `OLLAMA_CONTEXT_LENGTH` | `8192` | 4096 | the RAG prompt is ~2k tokens today and grows with retrieval width. Past the limit Ollama truncates from the **front**, which is where the grounding system prompt lives -- it looks exactly like the model ignoring its instructions. |
+| `OLLAMA_KEEP_ALIVE` | `-1` | 5m | otherwise an idle gap costs a full model reload on the next question. |
+
+`LLM_REASONING_EFFORT=none` in `.env` matters as much as either of these.
+gemma4 reasons before every answer by default, and Ollama returns that
+reasoning in a field this service does not forward -- so the tokens are
+generated, discarded, and paid for in latency. It was 8.7s of an 18.5s request.
+Check a model can disable it before setting this (`values` must include
+`false`):
+
+```bash
+curl -s localhost:11434/api/show -d '{"model":"gemma4:e4b"}' | grep -A6 thinking
+```
+
+```bash
+launchctl setenv OLLAMA_CONTEXT_LENGTH 8192
+launchctl setenv OLLAMA_KEEP_ALIVE -1
+# quit and reopen Ollama, then confirm both models stay resident:
+ollama ps
+```
+
+`OLLAMA_MAX_LOADED_MODELS` defaults to 3, so the embedding and chat models
+already co-exist; no change needed. `OLLAMA_NUM_PARALLEL` defaults to 1, so two
+simultaneous chats queue -- fine for now, worth raising under real load.
+
+On startup `chats-service` logs whether the endpoint is reachable and whether
+each configured model is actually pulled:
+
+```
+[RAG] chat model gemma4:e4b: ok
+[RAG] embedding model qwen3-embedding:0.6b: ok
+[RAG] pgvector 0.8.1 | ef_search=100 | iterative_scan=on
+```
+
+Every answered query logs its stage timings. `prefill` is up to the first
+stream chunk; the gap to `ttft` is output the model generated but did not
+forward -- i.e. hidden reasoning, which `LLM_REASONING_EFFORT` controls:
+
+```
+[RAG] chat=<id> history=1ms save_msg=5ms embed=263ms search=7ms prefill=2974ms ttft=9827ms generate=9849ms persist=7ms total=22931ms
+```
+
+**Cost tracking is always zero.** Self-hosted inference has no per-token price,
+so `token_usage.total_cost` stays at 0. Token counts still accumulate -- on your
+own hardware they are a capacity signal, not a billing one.
 
 ### Schema management
 

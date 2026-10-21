@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database.postgres_client import init_db, close_db
 from app.apis.documents import router as documents
 from app.apis.chats import router as chats
+from app.helpers.rag_graph import check_inference_ready
 from app.middleware.auth import AuthMiddleware
 from app.utils.errors import register_exception_handlers
 from app.core.config import settings
@@ -22,6 +23,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    await check_inference_ready()
 
 @app.on_event("shutdown")
 async def on_shutdown():

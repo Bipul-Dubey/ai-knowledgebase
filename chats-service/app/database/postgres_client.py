@@ -28,7 +28,9 @@ async def init_db(retries: int = 5, delay: int = 2):
         for attempt in range(retries):
             try:
                 # Create pool but DO NOT auto-open it
-                pool = AsyncConnectionPool(conn_str, min_size=1, max_size=20)
+                pool = AsyncConnectionPool(
+                    conn_str, min_size=1, max_size=20, open=False
+                )
                 await pool.open()  # explicitly open the pool
 
                 # Test connection

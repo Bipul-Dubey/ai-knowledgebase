@@ -6,6 +6,7 @@ from app.helpers import storage
 from app.helpers.train_document import run_training_job
 from pydantic import BaseModel
 from typing import List, Optional
+from hashlib import sha256
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -41,6 +42,8 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
     try:
         file_bytes = await file.read()
         file_size = len(file_bytes)
+        # Lets training skip a document whose bytes have not changed.
+        content_hash = sha256(file_bytes).hexdigest()
 
         s3_key, presigned_url, expires_at = storage.upload_file(
             file_bytes=file_bytes,
@@ -54,11 +57,12 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 """
                 INSERT INTO documents
                     (created_by, organization_id, file_name, s3_key,
-                    file_size, status, trainable, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, 'untrained', TRUE, NOW(), NOW())
+                    file_size, content_hash, status, trainable,
+                    created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, 'untrained', TRUE, NOW(), NOW())
                 RETURNING id, file_name, file_size, created_at
                 """,
-                (user_id, org_id, file.filename, s3_key, file_size),
+                (user_id, org_id, file.filename, s3_key, file_size, content_hash),
             )
             document = await cur.fetchone()
 
@@ -151,6 +155,8 @@ async def serve_local_document(key: str, exp: int, sig: str):
 
 class TrainRequest(BaseModel):
     document_ids: Optional[List[str]] = None
+    # Re-embed even when the content and indexing settings are unchanged.
+    force: bool = False
 
 
 @router.post("/train")
@@ -199,7 +205,6 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
                 """
                 UPDATE documents
                 SET status='training',
-                    last_trained_at = NULL,
                     updated_at=NOW()
                 WHERE organization_id=%s
                   AND id = ANY(%s)
@@ -235,7 +240,7 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
 
         # 4️⃣ Trigger async worker
         run_training_job.delay(
-            job["id"], org_id, user_id, updated_ids
+            job["id"], org_id, user_id, updated_ids, body.force
         )
 
         return APIResponse(
