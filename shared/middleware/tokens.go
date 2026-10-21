@@ -12,8 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var jwtSecret = []byte("YOUR_SUPER_SECRET_KEY")
-
 func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -41,9 +39,16 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 }
 
 func validateJWT(tokenStr string, db *gorm.DB) (*utils.JWTClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &utils.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
+	token, err := jwt.ParseWithClaims(
+		tokenStr,
+		&utils.JWTClaims{},
+		func(token *jwt.Token) (interface{}, error) {
+			return utils.JWTSecret(), nil
+		},
+		// Reject any token not signed with the expected algorithm, rather than
+		// trusting the "alg" header the token itself supplies.
+		jwt.WithValidMethods([]string{utils.SigningMethod.Alg()}),
+	)
 
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid token in validateJWT")

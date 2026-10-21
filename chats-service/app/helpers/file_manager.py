@@ -5,7 +5,7 @@ import textract
 from pathlib import Path
 from typing import List, Union
 
-from app.helpers.s3_storage import download_file_from_s3
+from app.helpers.storage import download_file
 
 
 class FileManager:
@@ -22,7 +22,7 @@ class FileManager:
         """
         Download file from S3 and store it in a temporary file.
         """
-        content = await download_file_from_s3(s3_key)
+        content = await download_file(s3_key)
         ext = Path(s3_key).suffix or ".bin"
 
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)

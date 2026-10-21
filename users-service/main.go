@@ -9,6 +9,8 @@ import (
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/handlers"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/routes"
 	"github.com/Bipul-Dubey/ai-knowledgebase/users-service/services"
+
+	"github.com/Bipul-Dubey/ai-knowledgebase/shared/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -17,6 +19,10 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("⚠️  No .env file found, relying on environment variables")
 	}
+
+	// Resolve JWT_SECRET now so a missing or weak value fails at startup
+	// instead of at the first authenticated request. Exits on failure.
+	_ = utils.JWTSecret()
 
 	// Initialize database
 	database, err := db.NewDB()

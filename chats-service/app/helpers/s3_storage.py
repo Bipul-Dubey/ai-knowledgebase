@@ -4,7 +4,6 @@ from botocore.exceptions import BotoCoreError, ClientError
 from datetime import datetime, timedelta, timezone
 import uuid
 from app.core.config import settings
-from app.database.postgres_client import get_db_cursor
 import asyncio
 
 # ==========================
@@ -84,30 +83,6 @@ async def download_file_from_s3(s3_key: str) -> bytes:
     except (BotoCoreError, ClientError) as e:
         raise RuntimeError(f"Failed to download file from S3: {str(e)}")
 
-
-# ==========================
-# 🚫 URL Invalidation Helper
-# ==========================
-async def invalidate_presigned_url(document_id: str):
-    """
-    Invalidate the saved presigned URL for a document.
-    Sets s3_url_expires_at = NOW() to force regeneration next time.
-    """
-    try:
-        async with get_db_cursor(commit=True) as cur:
-            await cur.execute(
-                """
-                UPDATE documents
-                SET s3_url = NULL,
-                    s3_url_expires_at = NOW() - INTERVAL '1 second',
-                    updated_at = NOW()
-                WHERE id = %s
-                """,
-                (document_id,)
-            )
-        print(f"[S3 INVALIDATE] Presigned URL invalidated for document {document_id}")
-    except Exception as e:
-        print(f"[S3 INVALIDATE ERROR] Failed to invalidate URL for {document_id}: {e}")
 
 
 class S3DeletionError(Exception):

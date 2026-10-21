@@ -11,6 +11,21 @@ RUN npm ci
 # Copy the rest of the application
 COPY . .
 
+# NEXT_PUBLIC_* values are inlined into the client bundle by `next build`, so
+# they must be present AT BUILD TIME - supplying them only at runtime via
+# env_file has no effect on an already-built bundle. docker-compose passes
+# these through from the repo-root .env as build args.
+ARG NEXT_PUBLIC_API_BASE
+ARG NEXT_PUBLIC_API_BASE_CHAT
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+ENV NEXT_PUBLIC_API_BASE_CHAT=$NEXT_PUBLIC_API_BASE_CHAT
+
+# Fail the build loudly on a missing value. Without this the bundle ships with
+# `undefined` as its API base, every request silently resolves against the
+# frontend's own origin, and the app 404s at runtime with no clue why.
+RUN : "${NEXT_PUBLIC_API_BASE:?is empty - set it in the repo-root .env}" \
+ && : "${NEXT_PUBLIC_API_BASE_CHAT:?is empty - set it in the repo-root .env}"
+
 # Build the app for production
 RUN npm run build:prod
 

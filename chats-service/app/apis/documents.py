@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Request, UploadFile, File, status, HTTPException, Query
+from fastapi.responses import FileResponse
 from app.utils.response import APIResponse
 from app.database.postgres_client import get_db_cursor
-from app.helpers.s3_storage import upload_file_to_s3, get_presigned_url
+from app.helpers import storage
 from app.helpers.train_document import run_training_job
 from pydantic import BaseModel
-from typing import List, Optional, Literal
-from hashlib import sha256
+from typing import List, Optional
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -41,11 +41,8 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
     try:
         file_bytes = await file.read()
         file_size = len(file_bytes)
-        file_hash = sha256(file_bytes).hexdigest()
 
-        metadata = {"original_filename": file.filename}
-
-        s3_key, presigned_url, expires_at = upload_file_to_s3(
+        s3_key, presigned_url, expires_at = storage.upload_file(
             file_bytes=file_bytes,
             org_id=org_id,
             filename=file.filename,
@@ -102,8 +99,8 @@ async def download_document(document_id: str, request: Request):
         if not doc:
             return APIResponse(True, "Document not found", None, status.HTTP_404_NOT_FOUND)
 
-        presigned_url, expires_at = get_presigned_url(
-            s3_key=doc["s3_key"], return_expiry=True
+        presigned_url, expires_at = storage.get_file_url(
+            doc["s3_key"], return_expiry=True
         )
 
         return APIResponse(
@@ -120,6 +117,36 @@ async def download_document(document_id: str, request: Request):
             {"error": str(e)},
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+# ==========================================================
+# 📂 Serve a locally-stored document  (ENV=development only)
+# ==========================================================
+# Stands in for an S3 presigned URL. Deliberately not JWT-authenticated: the
+# frontend opens this in a new tab, and a tab navigation sends no Authorization
+# header. Authority comes from the HMAC signature over the storage key and the
+# expiry, which is the same contract a presigned URL offers. AuthMiddleware
+# skips this prefix for that reason.
+@router.get("/local/{key:path}")
+async def serve_local_document(key: str, exp: int, sig: str):
+    if not storage.is_local():
+        # Nothing is served from disk outside development.
+        raise HTTPException(status_code=404, detail="Not found")
+
+    try:
+        storage.verify_local_url(key, exp, sig)
+        path = storage.local_path(key)
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return FileResponse(
+        path,
+        media_type=storage.guess_media_type(key),
+        filename=storage.original_filename(key),
+    )
+
 
 # =======================
 # 🧠 3️⃣ Train Documents
@@ -316,84 +343,6 @@ async def set_trainable_bulk(request: Request, body: TrainableUpdateBulkRequest)
             {"error": str(e)},
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
-
-# # =======================
-# # 🗑️ Delete Document (Hard Delete)
-# # =======================
-# @router.delete("/delete/{document_id}")
-# async def delete_document(document_id: str, request: Request):
-#     claims = getattr(request.state, "claims", None)
-#     if not claims:
-#         return APIResponse(
-#             True,
-#             "Unauthorized",
-#             None,
-#             status.HTTP_401_UNAUTHORIZED,
-#         )
-
-#     org_id = claims.get("organization_id")
-
-#     try:
-#         async with get_db_cursor() as cur:
-
-#             # 1️⃣ Get document & verify ownership
-#             await cur.execute(
-#                 """
-#                 SELECT s3_key
-#                 FROM documents
-#                 WHERE id=%s AND organization_id=%s
-#                 """,
-#                 (document_id, org_id),
-#             )
-#             doc = await cur.fetchone()
-
-#             if not doc:
-#                 return APIResponse(
-#                     True,
-#                     "Document not found",
-#                     None,
-#                     status.HTTP_404_NOT_FOUND,
-#                 )
-
-#             s3_key = doc["s3_key"]
-
-#             # 2️⃣ Delete from S3 first
-#             try:
-#                 await delete_s3_object(s3_key)   # ✅ MUST await
-#             except S3DeletionError as s3_error:   # ✅ catch specific error
-#                 print(f"[S3 DELETE ERROR] {s3_error}")
-#                 return APIResponse(
-#                     True,
-#                     "Failed to delete file from S3",
-#                     {"error": str(s3_error)},
-#                     status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                 )
-
-#             # 3️⃣ Delete from DB
-#             await cur.execute(
-#                 """
-#                 DELETE FROM documents
-#                 WHERE id=%s AND organization_id=%s
-#                 """,
-#                 (document_id, org_id),
-#             )
-
-#         return APIResponse(
-#             False,
-#             "Document deleted successfully",
-#             None,
-#         )
-
-#     except Exception as e:
-#         print(f"[DELETE ERROR] {e}")
-#         return APIResponse(
-#             True,
-#             "Failed to delete document",
-#             {"error": str(e)},
-#             status.HTTP_500_INTERNAL_SERVER_ERROR,
-#         )
-
 
 # =======================
 # 🗑️ Delete Document (Soft Delete)

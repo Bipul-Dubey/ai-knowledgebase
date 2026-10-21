@@ -310,33 +310,3 @@ func (s *organizationService) DeleteOrganization(orgID string) error {
 
 	return nil
 }
-
-/*
-func (s *organizationService) DeleteOrganization(orgID string) error {
-	if orgID == "" {
-		return errors.New("organization ID cannot be empty")
-	}
-
-	orgUUID, err := uuid.Parse(orgID)
-	if err != nil {
-		return errors.New("invalid organization ID")
-	}
-
-	result := s.db.Model(&models.Organization{}).
-		Where("id = ?", orgUUID).
-		Updates(map[string]interface{}{
-			"is_deleted": true,
-			"deleted_at": time.Now(),
-		})
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return errors.New("organization not found")
-	}
-
-	return nil
-}
-*/

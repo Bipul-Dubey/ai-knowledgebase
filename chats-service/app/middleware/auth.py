@@ -1,4 +1,3 @@
-import os
 import jwt
 import traceback
 from fastapi import Request, HTTPException
@@ -7,11 +6,47 @@ from fastapi.responses import JSONResponse
 from jwt import ExpiredSignatureError, InvalidTokenError, DecodeError
 from psycopg import OperationalError, InterfaceError
 
+from app.core.config import settings
 from app.database.postgres_client import get_db_cursor
+from app.helpers.storage import LOCAL_URL_PREFIX
 from app.utils.response import APIResponse
 
-JWT_SECRET = os.getenv("JWT_SECRET", "YOUR_SUPER_SECRET_KEY")
-JWT_ALGORITHM = "HS256"
+JWT_SECRET = settings.JWT_SECRET
+JWT_ALGORITHM = settings.JWT_ALGORITHM
+
+# No fallback secret. A default would be shared by every checkout, letting
+# anyone who had seen the source forge tokens for any organization. It also has
+# to match users-service exactly, and a silent default is precisely how the two
+# services drift apart. Fail at import instead.
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET is not set - refusing to start. It must match the value "
+        "given to users-service. Generate one with: openssl rand -hex 48"
+    )
+
+if len(JWT_SECRET) < 32:
+    raise RuntimeError(
+        f"JWT_SECRET must be at least 32 characters, got {len(JWT_SECRET)} "
+        "- refusing to start."
+    )
+
+
+# Paths that do not require a JWT:
+#   /docs, /redoc, /openapi.json  developer documentation
+#   /health                       liveness probe; must answer without creds
+#   /api/v1/documents/local/      dev-only local file serving. Not actually
+#                                 unauthenticated -- it verifies an HMAC
+#                                 signature over the storage key and an expiry,
+#                                 the same contract as an S3 presigned URL,
+#                                 which a browser tab can follow without
+#                                 sending an Authorization header.
+PUBLIC_PATH_PREFIXES = (
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/health",
+    LOCAL_URL_PREFIX,
+)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -20,10 +55,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        # ✅ 2. Skip auth for docs & OpenAPI
-        if request.url.path.startswith("/docs") or \
-           request.url.path.startswith("/redoc") or \
-           request.url.path.startswith("/openapi.json"):
+        # ✅ 2. Skip auth for the public prefixes
+        if request.url.path.startswith(PUBLIC_PATH_PREFIXES):
             return await call_next(request)
 
         try:

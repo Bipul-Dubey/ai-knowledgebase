@@ -7,7 +7,10 @@ from app.helpers.get_embedding_with_retry import get_embedding_with_retry
 from app.helpers.token_usage import record_token_usage
 from app.core.config import settings
 
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+client = AsyncOpenAI(
+    api_key=settings.LLM_API_KEY,
+    base_url=settings.LLM_BASE_URL,
+)
 
 # Base RAG Configuration
 TOP_K_RAG = 5
@@ -59,7 +62,7 @@ Optimized Query:
 """
 
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=settings.LLM_MODEL,
         temperature=0.0,
         messages=[
             {"role": "system", "content": system_prompt.strip()},
@@ -115,7 +118,7 @@ You are a 📄 **Document-Based AI Assistant**.
 
 
 # 🚀 MAIN RAG QUERY (STREAMING)
-async def query_rag_openai_stream(
+async def query_rag_stream(
     org_id: str,
     user_id: str,
     chat_id: str,
@@ -206,7 +209,7 @@ async def query_rag_openai_stream(
     # LLM Streaming
     try:
         stream = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.LLM_MODEL,
             temperature=0.2,
             stream=True,
             messages=[
@@ -243,7 +246,7 @@ async def query_rag_openai_stream(
         await record_token_usage(
             organization_id=org_id,
             user_id=user_id,
-            model="gpt-4o-mini",
+            model=settings.LLM_MODEL,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
         )

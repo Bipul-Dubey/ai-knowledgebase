@@ -5,8 +5,11 @@ from app.helpers.token_usage import record_token_usage
 from app.core.config import settings
 import traceback
 
-# OpenAI client
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+# Client for the self-hosted OpenAI-compatible endpoint (Ollama).
+client = OpenAI(
+    api_key=settings.LLM_API_KEY,
+    base_url=settings.LLM_BASE_URL,
+)
 
 async def get_embedding_with_retry(
     text: str,
@@ -21,14 +24,27 @@ async def get_embedding_with_retry(
     """
     for attempt in range(1, retries + 1):
         try:
-            # Call OpenAI in a thread to avoid blocking asyncio
+            # The SDK's sync client blocks, so keep it off the event loop
             response = await asyncio.to_thread(
                 client.embeddings.create,
-                model="text-embedding-3-small",
+                model=settings.EMBEDDING_MODEL,
                 input=text[:8191],
             )
 
             embedding = response.data[0].embedding
+
+            # Fail loudly on a model/schema mismatch. Without this the first
+            # symptom is a pgvector "expected N dimensions, not M" error from
+            # deep inside the training job, which names neither the model nor
+            # the column it disagrees with.
+            if len(embedding) != settings.EMBEDDING_DIM:
+                raise ValueError(
+                    f"{settings.EMBEDDING_MODEL} returned {len(embedding)} "
+                    f"dimensions but EMBEDDING_DIM is {settings.EMBEDDING_DIM} "
+                    f"and document_chunks.embedding is vector("
+                    f"{settings.EMBEDDING_DIM}). Re-run the dimension "
+                    f"migration, or correct EMBEDDING_DIM."
+                )
 
             # Record token usage (per user/org only)
             try:
@@ -48,17 +64,17 @@ async def get_embedding_with_retry(
 
         except (RateLimitError, APIConnectionError, Timeout) as e:
             delay = base_delay * (2 ** (attempt - 1)) + (0.2 * attempt)
-            print(f"[OpenAI RETRY] Attempt {attempt}/{retries}: {e}. Retrying in {delay:.2f}s...")
+            print(f"[EMBED RETRY] Attempt {attempt}/{retries}: {e}. Retrying in {delay:.2f}s...")
             if attempt == retries:
-                print(f"[OpenAI FAIL] Giving up after {retries} attempts: {e}")
+                print(f"[EMBED FAIL] Giving up after {retries} attempts: {e}")
                 raise
             await asyncio.sleep(delay)
 
         except APIError as e:
-            print(f"[OpenAI API ERROR] {e}")
+            print(f"[EMBED API ERROR] {e}")
             raise
 
         except Exception as e:
-            print(f"[OpenAI UNEXPECTED] {e}\n{traceback.format_exc()}")
+            print(f"[EMBED UNEXPECTED] {e}\n{traceback.format_exc()}")
             raise
 

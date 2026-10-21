@@ -2,10 +2,9 @@
 from fastapi import APIRouter, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
 import asyncio
 import json
-from app.helpers.rag_graph import query_rag_openai_stream
+from app.helpers.rag_graph import query_rag_stream
 from app.helpers.chat import create_chat
 from app.utils.response import APIResponse
 from app.database.postgres_client import get_db_cursor
@@ -15,11 +14,6 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 # --------------------------
 # List chats
 # --------------------------
-class ChatListResponse(BaseModel):
-    id: str
-    title: str
-    last_message_at: Optional[str]
-
 @router.get("/list")
 async def get_chats_list(request: Request):
     claims = getattr(request.state, "claims", None)
@@ -102,7 +96,7 @@ async def chat_query_sse(payload: ChatQuerySchema, request: Request):
         await asyncio.sleep(0)
 
         try:
-            async for event in query_rag_openai_stream(
+            async for event in query_rag_stream(
                 org_id=org_id,
                 user_id=user_id,
                 chat_id=chat_id,

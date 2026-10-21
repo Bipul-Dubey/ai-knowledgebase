@@ -1,7 +1,6 @@
 "use client";
 import DangerZone from "@/components/settings/DangerZone";
 import GeneralSettings from "@/components/settings/GeneralSettings";
-import ModelSettings from "@/components/settings/ModelSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { Settings } from "lucide-react";
 
@@ -29,9 +28,6 @@ const SettingsPage = () => {
       <div className="flex flex-col space-y-6 py-6">
         {/* general settings - organization */}
         <GeneralSettings />
-        {/* Model setting - Add OPENAI API keys and test if it correct or not */}
-        <ModelSettings />
-
         {/* delete account - if owner */}
         {isAdmin && <DangerZone />}
       </div>

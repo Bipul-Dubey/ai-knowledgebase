@@ -74,12 +74,13 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 -- ====================================================
 -- Documents
 -- ====================================================
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     created_by UUID REFERENCES users(id),
     file_name VARCHAR(1024) NOT NULL,
     s3_key TEXT NOT NULL,
+    file_size BIGINT,
     status VARCHAR(20) DEFAULT 'pending',
     trainable BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -88,13 +89,13 @@ CREATE TABLE documents (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_documents_org ON documents(organization_id);
-CREATE INDEX idx_documents_status ON documents(status);
+CREATE INDEX IF NOT EXISTS idx_documents_org ON documents(organization_id);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 
 -- ====================================================
 -- Training Jobs
 -- ====================================================
-CREATE TABLE training_jobs (
+CREATE TABLE IF NOT EXISTS training_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     initiated_by UUID REFERENCES users(id),
@@ -106,35 +107,45 @@ CREATE TABLE training_jobs (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX idx_training_jobs_org ON training_jobs(organization_id);
+CREATE INDEX IF NOT EXISTS idx_training_jobs_org ON training_jobs(organization_id);
 
 -- ====================================================
 -- Document Chunks (CORE RAG TABLE)
 -- ====================================================
-CREATE TABLE document_chunks (
+CREATE TABLE IF NOT EXISTS document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     chunk_index INT NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding VECTOR(1536) NOT NULL,
+    -- Must match EMBEDDING_DIM in chats-service config, which must match the
+    -- embedding model: 1024 = qwen3-embedding:0.6b, 768 = embeddinggemma-2.
+    -- Changing the model means changing this width, which is NOT an additive
+    -- change: it needs a hand-run migration that truncates document_chunks,
+    -- alters the column, rebuilds the index below, and resets every document
+    -- to 'untrained' so training re-embeds it.
+    embedding VECTOR(1024) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
 
     CONSTRAINT uq_document_chunk UNIQUE (document_id, chunk_index)
 );
 
-CREATE INDEX idx_document_chunks_org
+CREATE INDEX IF NOT EXISTS idx_document_chunks_org
     ON document_chunks(organization_id);
 
-CREATE INDEX idx_document_chunks_embedding
+-- HNSW rather than IVFFlat. An IVFFlat index trains its centroids from the
+-- rows present when the index is built, so creating one here -- against an
+-- empty table at first boot -- produces an index with near-useless recall that
+-- has to be dropped and rebuilt after ingest. HNSW has no training step and is
+-- safe to create up front, which is what makes automated schema setup viable.
+CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding
     ON document_chunks
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
+    USING hnsw (embedding vector_cosine_ops);
 
 -- ====================================================
 -- Chats
 -- ====================================================
-CREATE TABLE chats (
+CREATE TABLE IF NOT EXISTS chats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -146,12 +157,12 @@ CREATE TABLE chats (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_chats_org ON chats(organization_id);
+CREATE INDEX IF NOT EXISTS idx_chats_org ON chats(organization_id);
 
 -- ====================================================
 -- Messages
 -- ====================================================
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -161,13 +172,13 @@ CREATE TABLE messages (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX idx_messages_chat ON messages(chat_id);
-CREATE INDEX idx_messages_org ON messages(organization_id);
+CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id);
+CREATE INDEX IF NOT EXISTS idx_messages_org ON messages(organization_id);
 
 -- ====================================================
 -- Token Usage
 -- ====================================================
-CREATE TABLE token_usage (
+CREATE TABLE IF NOT EXISTS token_usage (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
 
@@ -179,8 +190,8 @@ CREATE TABLE token_usage (
     PRIMARY KEY (organization_id, user_id)
 );
 
-CREATE INDEX idx_token_usage_org ON token_usage(organization_id);
-CREATE INDEX idx_token_usage_user ON token_usage(user_id);
+CREATE INDEX IF NOT EXISTS idx_token_usage_org ON token_usage(organization_id);
+CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id);
 
 -- ====================================================
 -- End of Basic RAG Schema (Organizations & Users Preserved)

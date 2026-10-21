@@ -1,17 +1,27 @@
 from app.database.postgres_client import get_db_cursor
 
-# OpenAI pricing per 1K tokens
-OPENAI_PRICING = {
-    "text-embedding-3-small": {"prompt": 0.00002, "completion": 0.0},
-    "text-embedding-3-large": {"prompt": 0.00013, "completion": 0.0},
-    "gpt-4o-mini": {"prompt": 0.00015, "completion": 0.00060},
-    "gpt-4o": {"prompt": 0.005, "completion": 0.015},
-}
+# Per-1K-token prices, by model.
+#
+# Empty, because inference is self-hosted: open-weight models on hardware we
+# own have no marginal per-token price, so every call costs 0.00. The mechanism
+# is kept rather than deleted for two reasons -- token_usage.total_cost is part
+# of the schema and the Go dashboard sums it, and a metered self-hosted gateway
+# could be priced here later.
+#
+# Token counts are still recorded, and still matter: when you own the hardware,
+# tokens are a capacity signal rather than a billing one.
+MODEL_PRICING: dict[str, dict[str, float]] = {}
+
 
 def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int = 0) -> float:
-    """Calculate total cost for given tokens and model."""
-    pricing = OPENAI_PRICING.get(model, {"prompt": 0, "completion": 0})
-    cost = (prompt_tokens / 1000) * pricing["prompt"] + (completion_tokens / 1000) * pricing["completion"]
+    """Cost for these tokens. 0.00 for any unpriced (i.e. self-hosted) model."""
+    pricing = MODEL_PRICING.get(model)
+    if not pricing:
+        return 0.0
+
+    cost = (prompt_tokens / 1000) * pricing["prompt"] + (
+        completion_tokens / 1000
+    ) * pricing["completion"]
     return round(cost, 6)
 
 async def record_token_usage(

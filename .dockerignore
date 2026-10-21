@@ -1,0 +1,17 @@
+# Applies to the services built with `context: .` (users-service, chats-service).
+# Only excludes paths no Dockerfile copies - do NOT add go.work, shared/,
+# users-service/ or chats-service/ here.
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+rag-frontend/node_modules
+rag-frontend/.next
+rag-frontend/out
+**/__pycache__
+**/*.pyc
+venv
+.venv
+local_data
+.DS_Store

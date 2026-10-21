@@ -11,11 +11,13 @@ import {
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { PATHS } from "@/constants/paths";
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import { useLogin } from "@/hooks/auth";
 import { useSnackbar } from "notistack";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import { AccountIdField } from "@/components/auth/AccountIdField";
+import { rememberAccount } from "@/lib/recent-accounts";
 
 interface ApiErrorResponse {
   message?: string;
@@ -29,16 +31,22 @@ export function LoginForm({
   const { enqueueSnackbar } = useSnackbar();
   const router = useRouter();
 
+  const [accountId, setAccountId] = useState("");
+  const [email, setEmail] = useState("");
+
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    // Password stays uncontrolled so the browser password manager behaves
+    // normally; only the two fields we suggest are held in state.
     const formData = new FormData(e.currentTarget);
+    const password = formData.get("password") as string;
 
     mutate(
       {
-        account_id: formData.get("account_id") as string,
-        email: formData.get("email") as string,
-        password: formData.get("password") as string,
+        account_id: accountId.trim(),
+        email: email.trim(),
+        password,
       },
       {
         onSuccess: (response) => {
@@ -51,6 +59,14 @@ export function LoginForm({
           } else {
             // OPTIONAL: store token
             localStorage.setItem("access_token", user.access_token);
+
+            // Recorded only on success, so a mistyped account ID never ends
+            // up being suggested back to the user.
+            rememberAccount({
+              accountId: accountId.trim(),
+              organizationName: user.organization_name,
+              email: user.email || email.trim(),
+            });
 
             enqueueSnackbar(response.message, {
               variant: "success",
@@ -86,16 +102,16 @@ export function LoginForm({
           </p>
         </div>
 
-        {/* Account ID */}
-        <Field>
-          <FieldLabel htmlFor="account_id">Account ID</FieldLabel>
-          <Input
-            id="account_id"
-            name="account_id"
-            placeholder="11XXXXXXXXXXXXXX"
-            required
-          />
-        </Field>
+        {/* Account ID, with suggestions from previous successful logins */}
+        <AccountIdField
+          value={accountId}
+          onChange={setAccountId}
+          onPick={(account) => {
+            setAccountId(account.accountId);
+            // Fill a blank email only -- never overwrite what is being typed.
+            if (account.email && !email.trim()) setEmail(account.email);
+          }}
+        />
 
         {/* Email */}
         <Field>
@@ -104,7 +120,13 @@ export function LoginForm({
             id="email"
             name="email"
             type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             placeholder="m@example.com"
+            // Pairs with current-password below. Together they are what tell a
+            // password manager this is a sign-in form worth filling -- there
+            // was no autoComplete anywhere in the app before.
+            autoComplete="username"
             required
           />
         </Field>
@@ -120,7 +142,13 @@ export function LoginForm({
               Forgot your password?
             </Link>
           </div>
-          <Input id="password" name="password" type="password" required />
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+          />
         </Field>
 
         <Field>
