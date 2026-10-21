@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import traceback
 from hashlib import sha256
@@ -10,7 +11,13 @@ from app.helpers.file_manager import FileManager
 from app.helpers.get_embedding_with_retry import embed_texts
 from app.helpers.token_usage import UsageAccumulator
 from app.core.config import settings
+from app.core.logging_config import setup_logging
 import app.database.postgres_client as pg
+
+# Celery is its own process: main.py never runs here.
+setup_logging()
+
+logger = logging.getLogger(__name__)
 
 
 # PostgreSQL Initialization (per worker)
@@ -47,6 +54,7 @@ def index_fingerprint(content_hash: str | None) -> str:
         str(settings.CHUNK_SIZE),
         str(settings.CHUNK_OVERLAP),
         "ctxhdr" if settings.CONTEXTUAL_CHUNK_HEADER else "plain",
+        "nonav" if settings.SKIP_NAVIGATIONAL_CHUNKS else "allchunks",
     ]
     return sha256("|".join(parts).encode()).hexdigest()
 
@@ -196,7 +204,7 @@ async def train_sources(
         # Nothing about the content or the indexing settings has changed, so
         # the stored vectors are still correct.
         if not force and doc.get("index_fingerprint") == fingerprint:
-            print(f"[TRAIN] {doc['file_name']}: unchanged, skipped")
+            logger.info(f"[TRAIN] {doc['file_name']}: unchanged, skipped")
             await mark_document_indexed(doc_id, fingerprint)
             any_success = True
             continue
@@ -254,7 +262,7 @@ async def train_sources(
             total_chunks += len(chunks)
             any_success = True
             pages = {c.page for c in chunks if c.page}
-            print(
+            logger.info(
                 f"[TRAIN] {doc['file_name']}: {len(chunks)} chunks"
                 f"{f' across {len(pages)} pages' if pages else ''} embedded"
             )
@@ -286,7 +294,7 @@ async def train_sources(
         total_chunks=total_chunks,
     )
 
-    print(
+    logger.info(
         f"🏁 Job {job_id} → {final_status} | chunks={total_chunks}"
     )
 
@@ -294,9 +302,9 @@ async def train_sources(
 # Celery Entry
 @celery_app.task(bind=True, max_retries=3)
 def run_training_job(self, job_id, org_id, user_id, document_ids=None, force=False):
-    print("🔥🔥🔥🔥🔥🔥🔥🔥 TRAIN_DOCUMENT 🔥🔥🔥🔥🔥🔥🔥🔥")
+    logger.error("🔥🔥🔥🔥🔥🔥🔥🔥 TRAIN_DOCUMENT 🔥🔥🔥🔥🔥🔥🔥🔥")
     try:
-        print(f"🚀 Starting training job {job_id}")
+        logger.info(f"🚀 Starting training job {job_id}")
         asyncio.run(train_sources(job_id, org_id, user_id, document_ids, force))
         return f"✅ Job {job_id} completed"
     except Exception as e:

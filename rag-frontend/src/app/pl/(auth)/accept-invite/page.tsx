@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Eye, EyeOff } from "lucide-react";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAcceptInvite } from "@/hooks/orgs_user";
 import { PATHS } from "@/constants/paths";
 import PageLoader from "@/components/common/PageLoader";
@@ -46,7 +46,6 @@ function AcceptInvite() {
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
-  const [showPassword, setShowPassword] = useState(false);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -151,11 +150,11 @@ function AcceptInvite() {
               )}
             </div>
 
-            {/* Password with Eye Icon */}
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
+            {/* Password */}
+            <div>
+              <PasswordInput
                 placeholder="Password"
+                autoComplete="new-password"
                 value={form.password}
                 onChange={(e) =>
                   setForm((prev) => ({
@@ -163,20 +162,7 @@ function AcceptInvite() {
                     password: e.target.value,
                   }))
                 }
-                className="pr-10"
               />
-
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-              >
-                {showPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
-                )}
-              </button>
 
               {errors.password && (
                 <p className="text-xs text-destructive mt-1">

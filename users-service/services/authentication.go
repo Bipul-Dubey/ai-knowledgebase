@@ -2,11 +2,9 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/Bipul-Dubey/ai-knowledgebase/shared/models"
@@ -49,33 +47,29 @@ func (s *authenticationService) SignUp(ctx context.Context, req *models.SignupRe
 		}
 	}()
 
-	// 1️⃣ Check if organization with same name exists
+	// 1️⃣ Check if organization with same name exists.
+	// Only ErrRecordNotFound means the name is free; any other error is a
+	// real failure and must not be read as "no duplicate".
 	var existingOrg models.Organization
-	if err := tx.Where("name = ?", req.OrganizationName).First(&existingOrg).Error; err == nil {
+	lookupErr := tx.Where("name = ?", req.OrganizationName).First(&existingOrg).Error
+	if lookupErr == nil {
 		tx.Rollback()
 		return nil, errors.New("organization with this name already exists")
 	}
-
-	// 2️⃣ Generate incremental account_id
-	var maxAccountID sql.NullString
-	if err := tx.Model(&models.Organization{}).Select("MAX(account_id)").Scan(&maxAccountID).Error; err != nil {
+	if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		tx.Rollback()
-		return nil, fmt.Errorf("failed to fetch max account ID: %w", err)
+		return nil, fmt.Errorf("failed to check organization name: %w", lookupErr)
 	}
 
-	var lastID int64
-	if maxAccountID.Valid && maxAccountID.String != "" {
-		parsedID, parseErr := strconv.ParseInt(maxAccountID.String, 10, 64)
-		if parseErr != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to parse last account ID: %w", parseErr)
-		}
-		lastID = parsedID
-	} else {
-		lastID = 1100000000000000
+	// 2️⃣ Draw account_id from the sequence. nextval is atomic, so two
+	// concurrent signups cannot be handed the same id the way MAX()+1 did.
+	var nextAccountID int64
+	if err := tx.Raw("SELECT nextval('organization_account_id_seq')").Scan(&nextAccountID).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to generate account ID: %w", err)
 	}
 
-	accountID := fmt.Sprintf("%016d", lastID+1)
+	accountID := fmt.Sprintf("%016d", nextAccountID)
 
 	// 3️⃣ Create organization
 	org := models.Organization{
@@ -328,7 +322,13 @@ func (s *authenticationService) ForgotPassword(email, accountID string) (interfa
 		Where("users.email = ? AND o.account_id = ? AND users.status = ?", email, accountID, "active").
 		First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not registered or inactive in this organization")
+			// Same response whether or not the address is registered, so
+			// this endpoint cannot be used to discover who has an account.
+			return gin.H{
+				"email":      email,
+				"account_id": accountID,
+				"message":    "If that account exists, a reset link has been sent",
+			}, nil
 		}
 		return nil, err
 	}
@@ -370,7 +370,7 @@ func (s *authenticationService) ForgotPassword(email, accountID string) (interfa
 	return gin.H{
 		"email":      user.Email,
 		"account_id": accountID,
-		"message":    "Password reset link sent successfully",
+		"message":    "If that account exists, a reset link has been sent",
 		"expires_at": expiresAt,
 	}, nil
 }
@@ -384,8 +384,9 @@ func (s *authenticationService) ResetPasswordByEmail(token string, newPassword s
 		return nil, err
 	}
 
-	// ⏰ Check token expiry
-	if user.ExpiresAt.Before(time.Now()) {
+	// ⏰ Check token expiry. ExpiresAt is a pointer and is cleared after a
+	// successful reset, so guard it before dereferencing.
+	if user.ExpiresAt == nil || user.ExpiresAt.Before(time.Now()) {
 		return nil, errors.New("reset link expired")
 	}
 

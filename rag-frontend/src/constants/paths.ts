@@ -2,6 +2,8 @@ export const PATHS = {
   pl: {
     LOGIN: "/pl",
     REGISTER: "/pl/register",
+    FORGOT_PASSWORD: "/pl/forgot-password",
+    RESET_PASSWORD: "/pl/reset-password",
     VERIFY_ACCOUNT: (token: string, accountId: string) =>
       `/pl/verify-account?token=${token}&account_id=${accountId}`,
 

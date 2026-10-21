@@ -1,8 +1,11 @@
+import logging
 import os
 import asyncio
 from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
 
 db: AsyncConnectionPool | None = None
 _db_lock = asyncio.Lock()
@@ -38,10 +41,10 @@ async def init_db(retries: int = 5, delay: int = 2):
                     await conn.execute("SELECT 1")
 
                 db = pool
-                print("✅ DB pool initialized")
+                logger.info("✅ DB pool initialized")
                 return
             except Exception as e:
-                print(f"❌ DB init attempt {attempt+1} failed: {e}")
+                logger.error(f"❌ DB init attempt {attempt+1} failed: {e}")
                 await asyncio.sleep(delay)
 
         raise RuntimeError("Failed to initialize DB after retries")
@@ -53,7 +56,7 @@ async def close_db():
     if db:
         await db.close()
         db = None
-        print("🔒 DB pool closed")
+        logger.info("🔒 DB pool closed")
 
 
 @asynccontextmanager

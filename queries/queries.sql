@@ -228,6 +228,23 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_tsv
     ON document_chunks
     USING gin (chunk_tsv);
 
+-- Answer provenance: [{id, title, pages[]}] per assistant message, so the
+-- sources panel survives a reload instead of living only in the SSE stream.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS sources JSONB;
+
+-- Signup used to allocate account_id with MAX(account_id)+1, bypassing the
+-- sequence, so the sequence still sits at its START value while rows exist
+-- above it. Fast-forward it past the highest id in use before anything calls
+-- nextval(), or the first signup would collide. Recomputed from MAX each
+-- run, so it stays idempotent.
+SELECT setval(
+    'organization_account_id_seq',
+    GREATEST(
+        (SELECT COALESCE(MAX(account_id), 1100000000000000) FROM organizations),
+        1100000000000000
+    )
+);
+
 
 -- ====================================================
 -- End of Basic RAG Schema (Organizations & Users Preserved)

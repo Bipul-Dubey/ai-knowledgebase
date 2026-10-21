@@ -7,6 +7,9 @@ from app.helpers.rag_graph import check_inference_ready
 from app.middleware.auth import AuthMiddleware
 from app.utils.errors import register_exception_handlers
 from app.core.config import settings
+from app.core.logging_config import setup_logging
+
+setup_logging()
 
 app = FastAPI(title="Chats Service")
 

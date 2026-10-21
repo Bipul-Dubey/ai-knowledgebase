@@ -50,6 +50,13 @@ class Settings:
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1500))
     CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 250))
 
+    # Drop table-of-contents and index pages at index time. They name every
+    # topic in a document and explain none of them, so they match almost any
+    # keyword query while being useless as context.
+    SKIP_NAVIGATIONAL_CHUNKS = os.getenv(
+        "SKIP_NAVIGATIONAL_CHUNKS", "true"
+    ).strip().lower() not in ("0", "false", "no")
+
     # Prepend "document > section (page N)" to each chunk before embedding.
     # A chunk from page 40 otherwise has no idea what document it belongs to,
     # which is why mid-document chunks retrieve badly. The stored chunk_text

@@ -1,8 +1,17 @@
-import { login, signup, verifyAccount } from "@/apis/authentications";
 import {
+  forgotPassword,
+  login,
+  resetPasswordByEmail,
+  signup,
+  verifyAccount,
+} from "@/apis/authentications";
+import {
+  AccountVerificationPayload,
   ApiResponse,
+  ForgotPasswordData,
   LoginPayload,
   LoginUser,
+  ResetPasswordByEmailPayload,
   SignupPayload,
   VerifyAccountData,
   VerifyAccountPayload,
@@ -18,6 +27,22 @@ export const useSignup = () => {
 export const useLogin = () => {
   return useMutation<ApiResponse<LoginUser>, Error, LoginPayload>({
     mutationFn: login,
+  });
+};
+
+export const useForgotPassword = () => {
+  return useMutation<
+    ApiResponse<ForgotPasswordData | null>,
+    Error,
+    AccountVerificationPayload
+  >({
+    mutationFn: forgotPassword,
+  });
+};
+
+export const useResetPasswordByEmail = () => {
+  return useMutation<ApiResponse<null>, Error, ResetPasswordByEmailPayload>({
+    mutationFn: resetPasswordByEmail,
   });
 };
 

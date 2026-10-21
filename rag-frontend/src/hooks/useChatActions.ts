@@ -5,6 +5,7 @@ import { useChatStore } from "@/providers/ChatStore";
 import { ENV } from "@/constants/environments";
 import { PATHS } from "@/constants/paths";
 import { useChatsList } from "./chats";
+import { useQueryClient } from "@tanstack/react-query";
 
 type SendOptions = {
   skipUserAdd?: boolean;
@@ -20,12 +21,14 @@ export const useChatActions = () => {
     setLastChatId,
     addMessage,
     appendVersionChunk,
+    setVersionSources,
     setStreaming,
     setAbortController,
     setWaitingResponse,
   } = useChatStore();
 
   const { refetch } = useChatsList();
+  const queryClient = useQueryClient();
 
   const sendMessage = async (input: string, options?: SendOptions) => {
     if (!input.trim()) return;
@@ -57,6 +60,9 @@ export const useChatActions = () => {
       from: "assistant",
       versions: [{ id: versionId, content: "" }],
     });
+
+    // For a new chat the real id only arrives with the chat_id event.
+    let activeChatId: string | null = options?.isNewChat ? null : chatId;
 
     const controller = new AbortController();
     setAbortController(controller);
@@ -115,11 +121,15 @@ export const useChatActions = () => {
               const parsed = JSON.parse(jsonString);
 
               // 🔥 chat_id
-              if (parsed.event === "chat_id" && options?.isNewChat) {
-                sessionStorage.setItem("justCreatedChat", parsed.chatId);
+              if (parsed.event === "chat_id") {
+                activeChatId = parsed.chatId;
 
-                router.replace(PATHS.pl.CHAT(orgId, parsed.chatId));
-                refetch();
+                if (options?.isNewChat) {
+                  sessionStorage.setItem("justCreatedChat", parsed.chatId);
+
+                  router.replace(PATHS.pl.CHAT(orgId, parsed.chatId));
+                  refetch();
+                }
               }
 
               // 🌊 streaming chunks
@@ -137,10 +147,10 @@ export const useChatActions = () => {
                 );
               }
 
-              // 🎯 final event
-              // if (parsed.event === "final") {
-              //   console.log("Final:", parsed.answer);
-              // }
+              // 🎯 final event - carries the documents the answer came from
+              if (parsed.event === "final" && Array.isArray(parsed.sources)) {
+                setVersionSources(assistantKey, versionId, parsed.sources);
+              }
             } catch (err) {
               console.error("SSE parse error:", err);
             }
@@ -162,6 +172,15 @@ export const useChatActions = () => {
       setStreaming(false);
       setWaitingResponse(false);
       setAbortController(null);
+
+      // This chat's messages query was filled mid-stream, before the
+      // assistant row existed. Drop that snapshot so coming back to the
+      // chat refetches the whole thread instead of just the question.
+      if (activeChatId) {
+        queryClient.invalidateQueries({
+          queryKey: ["chat-messages", activeChatId],
+        });
+      }
     }
   };
 

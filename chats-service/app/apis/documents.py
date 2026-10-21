@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Request, UploadFile, File, status, HTTPException, Query
 from fastapi.responses import FileResponse
 from app.utils.response import APIResponse
@@ -7,6 +8,8 @@ from app.helpers.train_document import run_training_job
 from pydantic import BaseModel
 from typing import List, Optional
 from hashlib import sha256
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -69,7 +72,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         return APIResponse(False, "Document uploaded successfully", document)
 
     except Exception as e:
-        print(f"[UPLOAD ERROR] {e}")
+        logger.error(f"[UPLOAD ERROR] {e}")
         return APIResponse(
             True,
             f"Failed to upload document: {str(e)}",
@@ -114,7 +117,7 @@ async def download_document(document_id: str, request: Request):
         )
 
     except Exception as e:
-        print(f"[DOWNLOAD ERROR] {e}")
+        logger.error(f"[DOWNLOAD ERROR] {e}")
         return APIResponse(
             True,
             "Failed to generate download URL",
@@ -254,7 +257,7 @@ async def train_documents_endpoint(request: Request, body: TrainRequest):
         )
 
     except Exception as e:
-        print(f"[TRAIN ERROR] {e}")
+        logger.error(f"[TRAIN ERROR] {e}")
         return APIResponse(
             True,
             "Failed to create training job",
@@ -338,7 +341,7 @@ async def set_trainable_bulk(request: Request, body: TrainableUpdateBulkRequest)
         )
 
     except Exception as e:
-        print(f"[TRAINABLE ERROR] {e}")
+        logger.error(f"[TRAINABLE ERROR] {e}")
         return APIResponse(
             True,
             "Failed to update trainable flags",
@@ -368,7 +371,7 @@ async def delete_document(document_id: str, request: Request):
             # 1️⃣ Verify document exists & ownership
             await cur.execute(
                 """
-                SELECT id
+                SELECT id, s3_key
                 FROM documents
                 WHERE id=%s
                   AND organization_id=%s
@@ -386,7 +389,16 @@ async def delete_document(document_id: str, request: Request):
                     status.HTTP_404_NOT_FOUND,
                 )
 
-            # 2️⃣ Soft delete
+            # 2️⃣ Drop the embeddings. The document row is kept (soft delete)
+            # but its chunks are dead weight: they are filtered out of every
+            # query, yet still occupy the table and the HNSW index, which
+            # slows every search that walks past them.
+            await cur.execute(
+                "DELETE FROM document_chunks WHERE document_id = %s",
+                (document_id,),
+            )
+
+            # 3️⃣ Soft delete
             await cur.execute(
                 """
                 UPDATE documents
@@ -400,6 +412,20 @@ async def delete_document(document_id: str, request: Request):
                 (document_id, org_id),
             )
 
+        # 4️⃣ Drop the stored file, after the transaction has committed.
+        # There is no restore path, so a kept blob is pure cost -- on S3 it
+        # is billed every month forever. A failure here must not fail the
+        # request: the document is already gone from the user's view, and an
+        # orphaned file is better than an error for work that succeeded.
+        if doc.get("s3_key"):
+            try:
+                await storage.delete_file(doc["s3_key"])
+            except storage.StorageError as exc:
+                logger.warning(
+                    f"[DELETE] document {document_id} deleted, "
+                    f"but its stored file remains: {exc}"
+                )
+
         return APIResponse(
             False,
             "Document deleted successfully",
@@ -407,7 +433,7 @@ async def delete_document(document_id: str, request: Request):
         )
 
     except Exception as e:
-        print(f"[DELETE ERROR] {e}")
+        logger.error(f"[DELETE ERROR] {e}")
         return APIResponse(
             True,
             "Failed to delete document",

@@ -1,7 +1,9 @@
 """Document text extraction and page-aware chunking."""
 
+import logging
 import bisect
 import os
+import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +15,8 @@ import pymupdf
 
 from app.core.config import settings
 from app.helpers.storage import download_file
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -135,6 +139,24 @@ _EXTRACTORS = {
 _LEGACY = {".doc": ".docx", ".xls": ".xlsx"}
 
 
+_DOT_LEADER = re.compile(r"\.{3,}")
+
+
+def _is_navigational(text: str) -> bool:
+    """True for table-of-contents and index pages.
+
+    They are dot leaders and page numbers: they name everything in the
+    document and explain none of it, so they match almost any keyword query
+    while carrying no information. Keyed on dot-leader density specifically
+    rather than a general punctuation ratio, which would also catch code.
+    """
+    if not text.strip():
+        return True
+
+    leader_chars = sum(len(m.group()) for m in _DOT_LEADER.finditer(text))
+    return leader_chars / len(text) > 0.15
+
+
 def _context_header(document_title: str, section: str | None, page: int | None) -> str:
     label = " > ".join(p for p in (document_title, section) if p)
     if page:
@@ -214,10 +236,16 @@ class FileManager:
 
         starts = [m[0] for m in marks]
         chunks: list[Chunk] = []
+        skipped = 0
         position = 0
 
         while position < len(full):
             raw = full[position : position + chunk_size].strip()
+
+            if raw and settings.SKIP_NAVIGATIONAL_CHUNKS and _is_navigational(raw):
+                skipped += 1
+                raw = ""
+
             if raw:
                 at = bisect.bisect_right(starts, position) - 1
                 _, number, section = marks[at] if at >= 0 else (0, 0, None)
@@ -236,6 +264,9 @@ class FileManager:
                     )
                 )
             position += step
+
+        if skipped:
+            logger.info(f"[CHUNK] {document_title}: skipped {skipped} navigational chunk(s)")
 
         return chunks
 

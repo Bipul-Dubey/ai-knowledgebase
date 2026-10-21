@@ -1,4 +1,4 @@
-import { TMessage } from "@/types";
+import { TMessage, TSource } from "@/types";
 import { create } from "zustand";
 
 type ChatStore = {
@@ -16,6 +16,11 @@ type ChatStore = {
     versionId: string,
     chunk: string,
   ) => void;
+  setVersionSources: (
+    messageKey: string,
+    versionId: string,
+    sources: TSource[],
+  ) => void;
 
   setStreaming: (value: boolean) => void;
   setWaitingResponse: (val: boolean) => void;
@@ -27,7 +32,6 @@ type ChatStore = {
 };
 
 export const useChatStore = create<ChatStore>((set, get) => ({
-  chatId: null,
   messages: [],
   isStreaming: false,
   abortController: null,
@@ -53,6 +57,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           ...msg,
           versions: msg.versions?.map((v) =>
             v.id === versionId ? { ...v, content: v.content + chunk } : v,
+          ),
+        };
+      }),
+    })),
+
+  setVersionSources: (messageKey, versionId, sources) =>
+    set((state) => ({
+      messages: state.messages.map((msg) => {
+        if (msg.key !== messageKey) return msg;
+
+        return {
+          ...msg,
+          versions: msg.versions?.map((v) =>
+            v.id === versionId ? { ...v, sources } : v,
           ),
         };
       }),

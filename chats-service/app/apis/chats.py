@@ -1,4 +1,5 @@
 # app/api/chats.py
+import logging
 from fastapi import APIRouter, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -8,6 +9,8 @@ from app.helpers.rag_graph import query_rag_stream
 from app.helpers.chat import create_chat
 from app.utils.response import APIResponse
 from app.database.postgres_client import get_db_cursor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -57,7 +60,7 @@ async def get_chats_list(request: Request):
         return APIResponse(False, "Chats fetched successfully", chat_list)
 
     except Exception as e:
-        print(f"[CHAT LIST ERROR] {e}")
+        logger.error(f"[CHAT LIST ERROR] {e}")
         return APIResponse(
             True,
             f"Failed to fetch chats: {e}",
@@ -142,7 +145,7 @@ async def get_chat_messages(chat_id: str, request: Request):
         async with get_db_cursor() as cur:
             await cur.execute(
                 """
-                SELECT id, role, content, created_at
+                SELECT id, role, content, sources, created_at
                 FROM messages
                 WHERE chat_id=%s AND organization_id=%s
                 ORDER BY created_at ASC
@@ -159,7 +162,7 @@ async def get_chat_messages(chat_id: str, request: Request):
         )
 
     except Exception as e:
-        print(f"[CHAT MESSAGES ERROR] {e}")
+        logger.error(f"[CHAT MESSAGES ERROR] {e}")
         return APIResponse(
             error=True,
             message=f"Failed to fetch chat messages: {e}",
@@ -233,7 +236,7 @@ async def delete_chat(chat_id: str, request: Request):
         )
 
     except Exception as e:
-        print(f"[DELETE CHAT ERROR] {e}")
+        logger.error(f"[DELETE CHAT ERROR] {e}")
         return APIResponse(
             True,
             f"Failed to delete chat: {e}",

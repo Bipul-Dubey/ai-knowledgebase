@@ -35,6 +35,9 @@ export default function ChatConversationPage() {
 
     if (justCreated === chatId) {
       sessionStorage.removeItem("justCreatedChat");
+      // Mark it hydrated so the refetch that follows the stream does not
+      // replace the messages still streaming into the store.
+      hydratedChatRef.current = chatId;
       return;
     }
 

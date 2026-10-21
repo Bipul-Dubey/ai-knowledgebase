@@ -14,4 +14,4 @@ COPY chats-service/app ./app
 
 EXPOSE 50051
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "50051", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "50051"]

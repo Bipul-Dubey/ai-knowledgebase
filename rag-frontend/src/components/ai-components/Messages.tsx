@@ -20,6 +20,7 @@ import {
   MessageResponse,
   MessageToolbar,
 } from "@/components/ai-elements/message";
+import MessageSources from "@/components/ai-components/MessageSources";
 import { TMessage } from "@/types";
 import {
   CopyIcon,
@@ -71,6 +72,8 @@ const Messages = ({
                             <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-300" />
                           </div>
                         )}
+
+                      <MessageSources sources={version.sources} />
                     </MessageContent>
                   ))}
                 </MessageBranchContent>

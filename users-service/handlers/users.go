@@ -51,13 +51,20 @@ func (h *UserHandler) InviteUserHandler(c *gin.Context) {
 }
 
 func (h *UserHandler) ResendVerificationEmail(c *gin.Context) {
-	var req models.AccountVerificationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, utils.APIResponse(true, "Invalid request payload", nil, http.StatusBadRequest))
+	claimsRaw, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, utils.APIResponse(true, "unauthorized", nil, http.StatusUnauthorized))
+		return
+	}
+	claims := claimsRaw.(*utils.JWTClaims)
+
+	userID := c.Param("id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, utils.APIResponse(true, "user id is required", nil, http.StatusBadRequest))
 		return
 	}
 
-	if err := h.userService.ResendVerificationEmail(req.AccountID, req.Email); err != nil {
+	if err := h.userService.ResendVerificationEmail(claims.OrganizationID, userID); err != nil {
 		c.JSON(http.StatusBadRequest, utils.APIResponse(true, err.Error(), nil, http.StatusBadRequest))
 		return
 	}

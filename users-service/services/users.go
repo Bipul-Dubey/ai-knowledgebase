@@ -15,7 +15,7 @@ import (
 
 type UserService interface {
 	InviteUser(inviterID uuid.UUID, inviterRole string, orgID uuid.UUID, req models.InviteUserRequest) (*models.InviteUserResponse, error)
-	ResendVerificationEmail(accountID string, email string) error
+	ResendVerificationEmail(orgID string, userID string) error
 	GetUsersByOrganization(orgID string) ([]models.UserResponse, error)
 	GetUserByID(orgID, userID string) (*models.UserResponse, error)
 	DeleteUser(orgID, requestingUserID, requestingRole, targetUserID string) error
@@ -122,17 +122,20 @@ func (s *userService) InviteUser(inviterID uuid.UUID, inviterRole string, orgID 
 	}, nil
 }
 
-func (s *userService) ResendVerificationEmail(accountID string, email string) error {
+// ResendVerificationEmail re-sends an invite to one user. The organization
+// is taken from the caller's token, not from the request, so an owner cannot
+// reach into another tenant by naming its account id.
+func (s *userService) ResendVerificationEmail(orgID string, userID string) error {
 	var org models.Organization
-	if err := s.db.Where("account_id = ?", accountID).First(&org).Error; err != nil {
-		return errors.New("organization not found for this account ID")
+	if err := s.db.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return errors.New("organization not found")
 	}
 
 	var user models.User
 	if err := s.db.
-		Where("email = ? AND organization_id = ? AND status IN ?", email, org.ID, []string{"pending", "suspended"}).
+		Where("id = ? AND organization_id = ? AND status IN ?", userID, org.ID, []string{"pending", "suspended"}).
 		First(&user).Error; err != nil {
-		return errors.New("no pending or suspended user found with this email for the given account")
+		return errors.New("no pending or suspended user found in this organization")
 	}
 
 	// If suspended, reset back to pending so they can re-verify

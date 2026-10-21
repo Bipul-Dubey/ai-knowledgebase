@@ -39,7 +39,7 @@ func SetupRoutes(r *gin.Engine, h *handlers.HandlerManager, db *gorm.DB) *gin.En
 			users := auth.Group("/users")
 			{
 				users.POST("/invite", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.InviteUserHandler)
-				users.POST("/resend-verification", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.ResendVerificationEmail)
+				users.POST("/:id/resend-invite", middleware.RoleAuthorization(constants.RoleOwner, constants.RoleMaintainer), h.UserHandler.ResendVerificationEmail)
 
 				users.GET(
 					"",

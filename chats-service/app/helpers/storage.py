@@ -44,7 +44,26 @@ def backend_name() -> str:
     return "local" if is_local() else "s3"
 
 
+_S3_SETTINGS = (
+    "AWS_S3_BUCKET",
+    "AWS_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+)
+
+
 def _s3():
+    # Fail with a readable message rather than boto3's opaque credential
+    # error on the first upload, mirroring the SMTP check in the Go sender.
+    missing = [n for n in _S3_SETTINGS if not getattr(settings, n, None)]
+    if missing:
+        raise StorageError(
+            "missing S3 configuration ("
+            + ", ".join(missing)
+            + "); set these, or set ENV=development to store documents on "
+            "local disk instead"
+        )
+
     # Lazy: s3_storage builds a boto3 client at import time.
     from app.helpers import s3_storage
 

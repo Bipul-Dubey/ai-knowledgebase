@@ -46,7 +46,7 @@ export const getCurrentUser = async (): Promise<ApiResponse<IUser>> => {
 };
 
 export const deleteOrganization = async () => {
-  const { data } = await axiosInstance.delete(`/organizations`);
+  const { data } = await axiosInstance.delete(`/organization`);
   return data;
 };
 

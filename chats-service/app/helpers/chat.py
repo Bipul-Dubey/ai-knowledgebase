@@ -1,15 +1,26 @@
 from app.database.postgres_client import get_db_cursor
+from psycopg.types.json import Json
 import uuid
 
 # Save message and update last_message_at
-async def save_message_to_db(org_id: str, chat_id: str, user_id: str, role: str, content: str):
+async def save_message_to_db(
+    org_id: str,
+    chat_id: str,
+    user_id: str,
+    role: str,
+    content: str,
+    sources: list | None = None,
+):
     async with get_db_cursor(commit=True) as cur:
         await cur.execute(
             """
-            INSERT INTO messages (id, chat_id, organization_id, sender_user_id, role, content, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            INSERT INTO messages (id, chat_id, organization_id, sender_user_id, role, content, sources, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
             """,
-            (str(uuid.uuid4()), chat_id, org_id, user_id, role, content)
+            (
+                str(uuid.uuid4()), chat_id, org_id, user_id, role, content,
+                Json(sources) if sources else None,
+            )
         )
         # Update chat's last_message_at
         await cur.execute(

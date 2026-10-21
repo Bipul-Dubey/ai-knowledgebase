@@ -41,6 +41,25 @@ export interface VerifyAccountPayload {
   token: string;
 }
 
+// Used by both forgot-password and resend-verification: the backend
+// identifies a person by organization account id plus email.
+export interface AccountVerificationPayload {
+  account_id: string;
+  email: string;
+}
+
+export interface ForgotPasswordData {
+  email: string;
+  account_id: string;
+  message: string;
+  expires_at?: string;
+}
+
+export interface ResetPasswordByEmailPayload {
+  token: string;
+  new_password: string;
+}
+
 export interface VerifyAccountData {
   user_id: string;
   email: string;
@@ -78,6 +97,7 @@ export interface IBackendMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  sources?: { id: string; title: string; pages: number[] }[] | null;
   created_at: string;
 }
 

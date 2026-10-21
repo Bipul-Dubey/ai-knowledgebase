@@ -24,6 +24,7 @@ export const mapBackendMessagesToStore = (
             {
               id: msg.id,
               content: msg.content,
+              sources: msg.sources ?? undefined,
             },
           ],
         };

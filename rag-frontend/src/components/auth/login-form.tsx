@@ -9,6 +9,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import Link from "next/link";
 import { PATHS } from "@/constants/paths";
 import { FormEvent, useState } from "react";
@@ -132,16 +133,15 @@ export function LoginForm({
           <div className="flex items-center">
             <FieldLabel htmlFor="password">Password</FieldLabel>
             <Link
-              href="#"
+              href={PATHS.pl.FORGOT_PASSWORD}
               className="ml-auto text-sm underline-offset-4 hover:underline"
             >
               Forgot your password?
             </Link>
           </div>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="current-password"
             required
           />

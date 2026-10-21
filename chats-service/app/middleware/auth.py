@@ -1,3 +1,4 @@
+import logging
 import jwt
 import traceback
 from fastapi import Request, HTTPException
@@ -10,6 +11,8 @@ from app.core.config import settings
 from app.database.postgres_client import get_db_cursor
 from app.helpers.storage import LOCAL_URL_PREFIX
 from app.utils.response import APIResponse
+
+logger = logging.getLogger(__name__)
 
 JWT_SECRET = settings.JWT_SECRET
 JWT_ALGORITHM = settings.JWT_ALGORITHM
@@ -81,13 +84,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     )
                     user = await cur.fetchone()
             except (OperationalError, InterfaceError) as db_err:
-                print("❌ Database connection error:", db_err)
+                logger.error(f"❌ Database connection error: {db_err}")
                 return JSONResponse(
                     status_code=503,
                     content=APIResponse(True, "Database temporarily unavailable", None, 503),
                 )
             except Exception as db_ex:
-                print("🔥 DB Query Error:", db_ex)
+                logger.error(f"🔥 DB Query Error: {db_ex}")
                 traceback.print_exc()
                 return JSONResponse(
                     status_code=500,
@@ -115,7 +118,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
 
         except Exception as e:
-            print("🔥 Unexpected Auth Middleware Error:", e)
+            logger.error(f"🔥 Unexpected Auth Middleware Error: {e}")
             traceback.print_exc()
             return JSONResponse(
                 status_code=500,

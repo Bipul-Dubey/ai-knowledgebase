@@ -1,6 +1,12 @@
 export type TRole = "user" | "assistant";
 
-export type TVersionRole = { id: string; content: string };
+export type TSource = { id: string; title: string; pages: number[] };
+
+export type TVersionRole = {
+  id: string;
+  content: string;
+  sources?: TSource[];
+};
 
 export type TMessage = {
   key: string;

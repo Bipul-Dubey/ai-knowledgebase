@@ -1,3 +1,4 @@
+import logging
 import re
 from time import perf_counter
 
@@ -9,6 +10,8 @@ from app.helpers.chat import save_message_to_db, fetch_recent_messages
 from app.helpers.get_embedding_with_retry import get_embedding_with_retry
 from app.helpers.token_usage import record_token_usage
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 client = AsyncOpenAI(
     api_key=settings.LLM_API_KEY,
@@ -73,7 +76,7 @@ async def _rerank(query: str, candidates: list[dict]) -> list[dict] | None:
         response.raise_for_status()
         scored = response.json()
     except Exception as exc:
-        print(f"[RERANK] unavailable, using vector order: {exc}")
+        logger.warning(f"[RERANK] unavailable, using vector order: {exc}")
         return None
 
     ranked = []
@@ -294,13 +297,13 @@ async def _select_chunks(
 
     if ranked and "score" in ranked[0]:
         best, worst = ranked[0], ranked[-1]
-        print(
+        logger.info(
             f"[RERANK] {len(ranked)} candidates | score "
             f"{worst['score']:.4f}..{best['score']:.4f} | logit "
             f"{(worst.get('logit') or 0):.2f}..{(best.get('logit') or 0):.2f} | "
             f"{len(kept)} cleared {settings.MIN_RERANK_SCORE}"
         )
-    print(
+    logger.info(
         f"[RAG] sending {len(chosen)} chunks from "
         f"{len({str(c['document_id']) for c in chosen})} document(s)"
     )
@@ -331,7 +334,7 @@ async def _vector_version(cur) -> tuple[int, ...]:
         raw = (row or {}).get("extversion") or "0"
         _pgvector_version = tuple(int(p) for p in re.findall(r"\d+", raw)[:3]) or (0,)
         iterative = "on" if _pgvector_version >= (0, 8) else "unsupported"
-        print(f"[RAG] pgvector {raw} | ef_search={HNSW_EF_SEARCH} | iterative_scan={iterative}")
+        logger.info(f"[RAG] pgvector {raw} | ef_search={HNSW_EF_SEARCH} | iterative_scan={iterative}")
     return _pgvector_version
 
 
@@ -361,14 +364,14 @@ async def check_inference_ready() -> None:
     try:
         available = {m.id for m in (await client.models.list()).data}
     except Exception as exc:
-        print(f"[RAG] inference endpoint unreachable at {settings.LLM_BASE_URL}: {exc}")
+        logger.info(f"[RAG] inference endpoint unreachable at {settings.LLM_BASE_URL}: {exc}")
         return
 
     for label, name in (
         ("chat", settings.LLM_MODEL),
         ("embedding", settings.EMBEDDING_MODEL),
     ):
-        print(f"[RAG] {label} model {name}: {'ok' if name in available else 'NOT PULLED'}")
+        logger.warning(f"[RAG] {label} model {name}: {'ok' if name in available else 'NOT PULLED'}")
 
 
 # Token estimation (rough, stream-safe)
@@ -394,9 +397,12 @@ Grounding:
 - If the Context does not answer the question, reply exactly:
   Not found in the provided documents.
 - Never invent document names; use only the names shown in brackets.
-- When the answer draws on several documents, say which said what.
-- Cite the page in brackets when one is given, e.g. (javascript_tutorial.pdf,
-  page 12). Never cite a page that is not shown in the Context.
+- Do not write file names, page numbers or citations in the prose; the UI
+  lists the sources separately. Name a document only when two documents
+  disagree, or when saying which one covers what.
+- A term appearing in a list, heading, index or table of contents is NOT an
+  answer. If the Context only names something without explaining it, reply
+  with the not-found sentence rather than describing where the name appears.
 
 Format - Markdown, rendered in a chat UI:
 - Open with a direct answer in one or two sentences, with no heading above it.
@@ -476,7 +482,7 @@ async def query_rag_stream(
     if candidates:
         distances = sorted(c["distance"] for c in candidates)
         keyword_hits = sum(1 for c in candidates if c["kw_rank"] is not None)
-        print(
+        logger.info(
             f"[RAG] {len(candidates)} candidates "
             f"({keyword_hits} keyword) | cosine distance "
             f"{distances[0]:.3f}..{distances[-1]:.3f} "
@@ -500,7 +506,7 @@ async def query_rag_stream(
     # decline. A 4B-class model asked to answer only from context it has not
     # been given will usually answer anyway.
     if not chunks:
-        print(
+        logger.info(
             f"[RAG] chat={chat_id} nothing cleared the relevance floor "
             f"({len(candidates)} candidates); refused without calling the LLM"
         )
@@ -525,7 +531,7 @@ async def query_rag_stream(
         org_id, chunks, settings.CONTEXT_NEIGHBOURS
     )
     timer.mark("expand")
-    print(
+    logger.info(
         f"[RAG] {len(chunks)} hits expanded to {len(context_chunks)} chunks "
         f"(+/-{settings.CONTEXT_NEIGHBOURS})"
     )
@@ -610,7 +616,8 @@ async def query_rag_stream(
 
         if full_response.strip():
             await save_message_to_db(
-                org_id, chat_id, None, "assistant", full_response.strip()
+                org_id, chat_id, None, "assistant", full_response.strip(),
+                sources=sources,
             )
 
 
@@ -628,7 +635,7 @@ async def query_rag_stream(
         # Final payload
 
         timer.mark("persist")
-        print(f"[RAG] chat={chat_id} {timer.summary()}")
+        logger.info(f"[RAG] chat={chat_id} {timer.summary()}")
 
         yield {
             "event": "final",
@@ -639,5 +646,5 @@ async def query_rag_stream(
         }
 
     except Exception as e:
-        print(f"[RAG] chat={chat_id} FAILED {timer.summary()} :: {e}")
+        logger.error(f"[RAG] chat={chat_id} FAILED {timer.summary()} :: {e}")
         yield {"event": "error", "content": f"❌ {str(e)}"}

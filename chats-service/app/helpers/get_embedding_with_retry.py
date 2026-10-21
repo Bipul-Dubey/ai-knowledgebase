@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import traceback
 
@@ -5,6 +6,8 @@ from openai import OpenAI, APIError, RateLimitError, APIConnectionError, Timeout
 
 from app.core.config import settings
 from app.helpers.token_usage import UsageAccumulator, record_token_usage
+
+logger = logging.getLogger(__name__)
 
 # Client for the self-hosted OpenAI-compatible endpoint (Ollama).
 client = OpenAI(
@@ -82,24 +85,24 @@ async def _embed_batch(
                             completion_tokens=completion,
                         )
             except Exception as exc:
-                print(f"[TOKEN USAGE WARN] not recorded: {exc}")
+                logger.warning(f"[TOKEN USAGE WARN] not recorded: {exc}")
 
             return vectors
 
         except (RateLimitError, APIConnectionError, Timeout) as e:
             delay = base_delay * (2 ** (attempt - 1)) + (0.2 * attempt)
-            print(f"[EMBED RETRY] Attempt {attempt}/{retries}: {e}. Retrying in {delay:.2f}s...")
+            logger.warning(f"[EMBED RETRY] Attempt {attempt}/{retries}: {e}. Retrying in {delay:.2f}s...")
             if attempt == retries:
-                print(f"[EMBED FAIL] Giving up after {retries} attempts: {e}")
+                logger.error(f"[EMBED FAIL] Giving up after {retries} attempts: {e}")
                 raise
             await asyncio.sleep(delay)
 
         except APIError as e:
-            print(f"[EMBED API ERROR] {e}")
+            logger.error(f"[EMBED API ERROR] {e}")
             raise
 
         except Exception as e:
-            print(f"[EMBED UNEXPECTED] {e}\n{traceback.format_exc()}")
+            logger.info(f"[EMBED UNEXPECTED] {e}\n{traceback.format_exc()}")
             raise
 
     raise RuntimeError("unreachable: retry loop exhausted without raising")
